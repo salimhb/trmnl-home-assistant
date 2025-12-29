@@ -24,6 +24,7 @@ import {
 import { loadDevicesConfig, loadPresets } from '../devices.js'
 import type { BrowserFacade } from './browserFacade.js'
 import type { ScheduleInput, ScheduleUpdate } from '../types/domain.js'
+import { toJson } from './json.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -139,7 +140,7 @@ export class HttpRouter {
 
     response.writeHead(httpStatus, { 'Content-Type': 'application/json' })
     response.end(
-      JSON.stringify({
+      toJson({
         status,
         uptime: process.uptime(),
         timestamp: new Date().toISOString(),
@@ -157,9 +158,9 @@ export class HttpRouter {
     response.setHeader('Content-Type', 'application/json')
 
     if (request.method === 'GET') {
-      const schedules = loadSchedules()
+      const schedules = await loadSchedules()
       response.writeHead(200)
-      response.end(JSON.stringify(schedules))
+      response.end(toJson(schedules))
       return true
     }
 
@@ -167,18 +168,18 @@ export class HttpRouter {
       try {
         const body = await this.#readRequestBody(request)
         const schedule = JSON.parse(body) as ScheduleInput
-        const created = createSchedule(schedule)
+        const created = await createSchedule(schedule)
         response.writeHead(201)
-        response.end(JSON.stringify(created))
+        response.end(toJson(created))
       } catch (err) {
         response.writeHead(400)
-        response.end(JSON.stringify({ error: (err as Error).message }))
+        response.end(toJson({ error: (err as Error).message }))
       }
       return true
     }
 
     response.writeHead(405)
-    response.end(JSON.stringify({ error: 'Method not allowed' }))
+    response.end(toJson({ error: 'Method not allowed' }))
     return true
   }
 
@@ -195,39 +196,39 @@ export class HttpRouter {
       try {
         const body = await this.#readRequestBody(request)
         const updates = JSON.parse(body) as ScheduleUpdate
-        const updated = updateSchedule(id, updates)
+        const updated = await updateSchedule(id, updates)
 
         if (!updated) {
           response.writeHead(404)
-          response.end(JSON.stringify({ error: 'Schedule not found' }))
+          response.end(toJson({ error: 'Schedule not found' }))
           return true
         }
 
         response.writeHead(200)
-        response.end(JSON.stringify(updated))
+        response.end(toJson(updated))
       } catch (err) {
         response.writeHead(400)
-        response.end(JSON.stringify({ error: (err as Error).message }))
+        response.end(toJson({ error: (err as Error).message }))
       }
       return true
     }
 
     if (request.method === 'DELETE') {
-      const deleted = deleteSchedule(id)
+      const deleted = await deleteSchedule(id)
 
       if (!deleted) {
         response.writeHead(404)
-        response.end(JSON.stringify({ error: 'Schedule not found' }))
+        response.end(toJson({ error: 'Schedule not found' }))
         return true
       }
 
       response.writeHead(200)
-      response.end(JSON.stringify({ success: true }))
+      response.end(toJson({ success: true }))
       return true
     }
 
     response.writeHead(405)
-    response.end(JSON.stringify({ error: 'Method not allowed' }))
+    response.end(toJson({ error: 'Method not allowed' }))
     return true
   }
 
@@ -240,13 +241,13 @@ export class HttpRouter {
 
     if (request.method !== 'POST') {
       response.writeHead(405)
-      response.end(JSON.stringify({ error: 'Method not allowed' }))
+      response.end(toJson({ error: 'Method not allowed' }))
       return true
     }
 
     if (!this.#scheduler) {
       response.writeHead(503)
-      response.end(JSON.stringify({ error: 'Scheduler not available' }))
+      response.end(toJson({ error: 'Scheduler not available' }))
       return true
     }
 
@@ -256,13 +257,13 @@ export class HttpRouter {
     try {
       const result = await this.#scheduler.executeNow(id)
       response.writeHead(200)
-      response.end(JSON.stringify(result))
+      response.end(toJson(result))
     } catch (err) {
       console.error('Error executing schedule manually:', err)
       response.writeHead(
         (err as Error).message.includes('not found') ? 404 : 500
       )
-      response.end(JSON.stringify({ error: (err as Error).message }))
+      response.end(toJson({ error: (err as Error).message }))
     }
 
     return true
@@ -271,14 +272,14 @@ export class HttpRouter {
   #handleDevicesAPI(response: ServerResponse): boolean {
     const devices = loadDevicesConfig()
     response.writeHead(200, { 'Content-Type': 'application/json' })
-    response.end(JSON.stringify(devices))
+    response.end(toJson(devices))
     return true
   }
 
   #handlePresetsAPI(response: ServerResponse): boolean {
     const presets = loadPresets()
     response.writeHead(200, { 'Content-Type': 'application/json' })
-    response.end(JSON.stringify(presets))
+    response.end(toJson(presets))
     return true
   }
 
@@ -313,7 +314,9 @@ export class HttpRouter {
       }
 
       const contentLength =
-        typeof content === 'string' ? Buffer.byteLength(content) : content.length
+        typeof content === 'string'
+          ? Buffer.byteLength(content)
+          : content.length
 
       response.writeHead(200, {
         'Content-Type': contentType,
