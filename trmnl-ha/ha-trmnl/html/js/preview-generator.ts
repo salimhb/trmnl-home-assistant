@@ -149,8 +149,10 @@ export class PreviewGenerator {
 
   /**
    * Displays loaded image with metadata.
+   * When dithering is enabled, applies CSS inversion to simulate firmware behavior.
+   * TRMNL firmware inverts 2-bit (grayscale) images, so preview shows what device displays.
    */
-  #displayImage(imageUrl: string, loadTimeMs: number): void {
+  #displayImage(imageUrl: string, loadTimeMs: number, simulateFirmwareInvert: boolean): void {
     const image = document.getElementById('previewImage') as HTMLImageElement | null
     const loadTime = document.getElementById('loadTime')
     const dimensions = document.getElementById('previewDimensions')
@@ -177,6 +179,10 @@ export class PreviewGenerator {
     image.src = imageUrl
     image.classList.remove('hidden')
 
+    // Simulate TRMNL firmware inversion for dithered images
+    // Firmware inverts 2-bit grayscale, so we invert preview to show actual device output
+    image.style.filter = simulateFirmwareInvert ? 'invert(1)' : ''
+
     this.#currentBlobUrl = imageUrl
   }
 
@@ -202,7 +208,11 @@ export class PreviewGenerator {
       const endTime = performance.now()
       const loadTimeMs = endTime - startTime
 
-      this.#displayImage(imageUrl, loadTimeMs)
+      // Simulate firmware inversion when dithering is enabled
+      // TRMNL firmware inverts 2-bit grayscale images automatically
+      const simulateFirmwareInvert = schedule.dithering?.enabled ?? false
+
+      this.#displayImage(imageUrl, loadTimeMs, simulateFirmwareInvert)
       this.#updateLoadingState(false)
     } catch (err) {
       console.error('Error loading preview:', err)
