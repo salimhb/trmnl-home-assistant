@@ -170,9 +170,15 @@ class App {
 
     // Disable button during send
     button.disabled = true
-    button.textContent = 'Sending...'
+    button.textContent = 'Saving...'
     button.style.opacity = '0.6'
     button.style.cursor = 'not-allowed'
+
+    // Ensure current form values are saved before sending
+    // This prevents race conditions between auto-save and send
+    await this.updateScheduleFromForm()
+
+    button.textContent = 'Sending...'
 
     // Use SendSchedule command (follows same pattern as other API calls)
     const sendCommand = new SendSchedule()

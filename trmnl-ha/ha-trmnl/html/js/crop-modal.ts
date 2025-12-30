@@ -276,11 +276,6 @@ export class CropModal {
         loadingEl?.classList.add('hidden')
         img.classList.remove('hidden')
 
-        // Simulate TRMNL firmware inversion for dithered images
-        // Firmware inverts 2-bit grayscale, so we invert preview to show actual device output
-        const simulateFirmwareInvert = schedule.dithering?.enabled ?? false
-        img.style.filter = simulateFirmwareInvert ? 'invert(1)' : ''
-
         const container = document.getElementById('modalPreviewContainer')
         if (container) {
           container.style.position = 'relative'

@@ -33,9 +33,7 @@ export class RenderTabs {
     const tabBar = document.getElementById('tabBar')
     if (!tabBar) return
 
-    tabBar.innerHTML = this.schedules
-      .map((schedule) => this.#renderTab(schedule))
-      .join('')
+    tabBar.innerHTML = this.schedules.map((schedule) => this.#renderTab(schedule)).join('')
   }
 
   #renderTab(schedule: Schedule): string {
@@ -129,9 +127,7 @@ export class RenderScheduleContent {
 
   #renderScheduleSettings(): string {
     const s = this.schedule
-    const enabledClass = s.enabled
-      ? 'bg-green-50 border-green-200'
-      : 'bg-gray-50 border-gray-200'
+    const enabledClass = s.enabled ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'
     const enabledTextClass = s.enabled ? 'text-green-700' : 'text-gray-600'
     const statusBadge = s.enabled
       ? '<span class="text-xs text-green-600">Running on schedule</span>'
@@ -144,9 +140,7 @@ export class RenderScheduleContent {
           <div class="flex items-center justify-between p-3 rounded-md ${enabledClass} border"
                title="When enabled, this schedule will automatically capture and upload screenshots">
             <div class="flex items-center">
-              <input type="checkbox" id="s_enabled" ${
-                s.enabled ? 'checked' : ''
-              }
+              <input type="checkbox" id="s_enabled" ${s.enabled ? 'checked' : ''}
                 class="h-5 w-5 border-gray-300 rounded"
                 onchange="window.app.updateField('enabled', this.checked)" />
               <label for="s_enabled" class="ml-2 font-medium ${enabledTextClass}">
@@ -231,9 +225,7 @@ export class RenderScheduleContent {
           <!-- Dashboard Path -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Dashboard Path</label>
-            <input type="text" id="s_path" value="${
-              s.dashboard_path || '/home'
-            }"
+            <input type="text" id="s_path" value="${s.dashboard_path || '/home'}"
               class="w-full px-3 py-2 border rounded-md" style="border-color: var(--primary-light)"
               onchange="window.app.updateScheduleFromForm()"
               placeholder="/lovelace/kitchen"
@@ -266,18 +258,14 @@ export class RenderScheduleContent {
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Width</label>
-              <input type="number" id="s_width" value="${
-                s.viewport?.width || 768
-              }"
+              <input type="number" id="s_width" value="${s.viewport?.width || 768}"
                 class="w-full px-3 py-2 border rounded-md" style="border-color: var(--primary-light)"
                 onchange="window.app.updateScheduleFromForm()"
                 title="Screenshot width in pixels" />
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Height</label>
-              <input type="number" id="s_height" value="${
-                s.viewport?.height || 1024
-              }"
+              <input type="number" id="s_height" value="${s.viewport?.height || 1024}"
                 class="w-full px-3 py-2 border rounded-md" style="border-color: var(--primary-light)"
                 onchange="window.app.updateScheduleFromForm()"
                 title="Screenshot height in pixels" />
@@ -302,9 +290,7 @@ export class RenderScheduleContent {
       <div class="mt-4 p-3 rounded-md" style="background-color: #f9fafb; border: 1px solid #e5e7eb">
         <div class="flex justify-between items-center mb-2">
           <label class="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
-            <input type="checkbox" id="s_crop_enabled" ${
-              s.crop?.enabled ? 'checked' : ''
-            }
+            <input type="checkbox" id="s_crop_enabled" ${s.crop?.enabled ? 'checked' : ''}
               class="h-4 w-4 border-gray-300 rounded"
               onchange="window.app.updateScheduleFromForm()"
               title="Enable crop region" />
@@ -328,18 +314,14 @@ export class RenderScheduleContent {
           </div>
           <div>
             <label class="block text-xs text-gray-600 mb-1">Width</label>
-            <input type="number" id="s_crop_width" value="${
-              s.crop?.width || s.viewport?.width || 768
-            }"
+            <input type="number" id="s_crop_width" value="${s.crop?.width || s.viewport?.width || 768}"
               class="w-full px-2 py-1 text-sm border rounded-md" style="border-color: var(--primary-light)"
               onchange="window.app.updateScheduleFromForm()"
               title="Crop width (pixels)" />
           </div>
           <div>
             <label class="block text-xs text-gray-600 mb-1">Height</label>
-            <input type="number" id="s_crop_height" value="${
-              s.crop?.height || s.viewport?.height || 1024
-            }"
+            <input type="number" id="s_crop_height" value="${s.crop?.height || s.viewport?.height || 1024}"
               class="w-full px-2 py-1 text-sm border rounded-md" style="border-color: var(--primary-light)"
               onchange="window.app.updateScheduleFromForm()"
               title="Crop height (pixels)" />
@@ -365,15 +347,9 @@ export class RenderScheduleContent {
           <select id="s_format" class="w-full px-3 py-2 border rounded-md" style="border-color: var(--primary-light)"
             onchange="window.app.updateScheduleFromForm()"
             title="Image output format">
-            <option value="png" ${
-              s.format === 'png' ? 'selected' : ''
-            }>PNG</option>
-            <option value="jpeg" ${
-              s.format === 'jpeg' ? 'selected' : ''
-            }>JPEG</option>
-            <option value="bmp" ${
-              s.format === 'bmp' ? 'selected' : ''
-            }>BMP</option>
+            <option value="png" ${s.format === 'png' ? 'selected' : ''}>PNG</option>
+            <option value="jpeg" ${s.format === 'jpeg' ? 'selected' : ''}>JPEG</option>
+            <option value="bmp" ${s.format === 'bmp' ? 'selected' : ''}>BMP</option>
           </select>
         </div>
         <div>
@@ -383,12 +359,8 @@ export class RenderScheduleContent {
             title="Rotate image after capture">
             <option value="" ${!s.rotate ? 'selected' : ''}>None</option>
             <option value="90" ${s.rotate === 90 ? 'selected' : ''}>90°</option>
-            <option value="180" ${
-              s.rotate === 180 ? 'selected' : ''
-            }>180°</option>
-            <option value="270" ${
-              s.rotate === 270 ? 'selected' : ''
-            }>270°</option>
+            <option value="180" ${s.rotate === 180 ? 'selected' : ''}>180°</option>
+            <option value="270" ${s.rotate === 270 ? 'selected' : ''}>270°</option>
           </select>
         </div>
       </div>
@@ -403,9 +375,7 @@ export class RenderScheduleContent {
       <div class="grid grid-cols-2 gap-2">
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Zoom</label>
-          <input type="number" id="s_zoom" value="${
-            s.zoom || 1
-          }" step="0.1" min="0.1" max="5"
+          <input type="number" id="s_zoom" value="${s.zoom || 1}" step="0.1" min="0.1" max="5"
             class="w-full px-3 py-2 border rounded-md"
             style="border-color: var(--primary-light)"
             onchange="window.app.updateScheduleFromForm()"
@@ -413,9 +383,7 @@ export class RenderScheduleContent {
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Wait (ms)</label>
-          <input type="number" id="s_wait" value="${
-            s.wait || ''
-          }" min="0" max="30000" step="100"
+          <input type="number" id="s_wait" value="${s.wait || ''}" min="0" max="30000" step="100"
             class="w-full px-3 py-2 border rounded-md" style="border-color: var(--primary-light)"
             placeholder="Auto"
             onchange="window.app.updateScheduleFromForm()"
@@ -464,14 +432,14 @@ export class RenderScheduleContent {
             onchange="window.app.updateScheduleFromForm()" />
           <span class="ml-2 text-sm text-gray-700">Dark Mode</span>
         </label>
-        <label class="flex items-center" title="Pre-invert image to counteract TRMNL firmware inversion (enable when using dithering)">
+        <label class="flex items-center" title="Swap black and white after capture (useful for negative displays)">
           <input type="checkbox" id="s_invert" ${s.invert ? 'checked' : ''}
             class="h-4 w-4 border-gray-300 rounded"
             onchange="window.app.updateScheduleFromForm()" />
           <span class="ml-2 text-sm text-gray-700">Invert Colors</span>
         </label>
       </div>
-      <p class="text-xs text-gray-500 mt-1">Dark Mode: Forces HA dark theme | Invert: Enable when using dithering (preview shows actual TRMNL OG device output)</p>
+      <p class="text-xs text-gray-500 mt-1">Dark Mode: Forces dark theme | Invert: Flips black↔white (for inverted e-ink displays)</p>
     `
   }
 
@@ -483,9 +451,7 @@ export class RenderScheduleContent {
         <h3 class="text-lg font-semibold mb-3" style="color: var(--primary-dark)">Dithering</h3>
         <div class="space-y-3">
           <div class="flex items-center">
-            <input type="checkbox" id="s_dithering" ${
-              s.dithering?.enabled ? 'checked' : ''
-            }
+            <input type="checkbox" id="s_dithering" ${s.dithering?.enabled ? 'checked' : ''}
               class="h-4 w-4 border-gray-300 rounded"
               onchange="window.app.updateScheduleFromForm()"
               title="Convert images to limited color palettes for e-ink displays" />
@@ -501,12 +467,8 @@ export class RenderScheduleContent {
               <option value="floyd-steinberg" ${
                 s.dithering?.method === 'floyd-steinberg' ? 'selected' : ''
               }>Floyd-Steinberg</option>
-              <option value="ordered" ${
-                s.dithering?.method === 'ordered' ? 'selected' : ''
-              }>Ordered</option>
-              <option value="none" ${
-                s.dithering?.method === 'none' ? 'selected' : ''
-              }>None</option>
+              <option value="ordered" ${s.dithering?.method === 'ordered' ? 'selected' : ''}>Ordered</option>
+              <option value="none" ${s.dithering?.method === 'none' ? 'selected' : ''}>None</option>
             </select>
             <p class="text-xs text-gray-500 mt-1">Floyd-Steinberg (best quality, smooth gradients) | Ordered (faster, crosshatch pattern) | None (hard edges)</p>
           </div>
@@ -516,32 +478,18 @@ export class RenderScheduleContent {
             <select id="s_palette" class="w-full px-3 py-2 border rounded-md" style="border-color: var(--primary-light)"
               onchange="window.app.updateScheduleFromForm()"
               title="Color palette matching your e-ink display capabilities">
-              <option value="bw" ${
-                s.dithering?.palette === 'bw' ? 'selected' : ''
-              }>1-bit (B&W)</option>
-              <option value="gray-4" ${
-                s.dithering?.palette === 'gray-4' ? 'selected' : ''
-              }>2-bit (4 grays)</option>
-              <option value="gray-16" ${
-                s.dithering?.palette === 'gray-16' ? 'selected' : ''
-              }>4-bit (16 grays)</option>
-              <option value="gray-256" ${
-                s.dithering?.palette === 'gray-256' ? 'selected' : ''
-              }>8-bit (256 grays)</option>
-              <option value="color-6a" ${
-                s.dithering?.palette === 'color-6a' ? 'selected' : ''
-              }>6-color (Inky 13.3)</option>
-              <option value="color-7a" ${
-                s.dithering?.palette === 'color-7a' ? 'selected' : ''
-              }>7-color (Inky 7.3)</option>
+              <option value="bw" ${s.dithering?.palette === 'bw' ? 'selected' : ''}>1-bit (B&W)</option>
+              <option value="gray-4" ${s.dithering?.palette === 'gray-4' ? 'selected' : ''}>2-bit (4 grays)</option>
+              <option value="gray-16" ${s.dithering?.palette === 'gray-16' ? 'selected' : ''}>4-bit (16 grays)</option>
+              <option value="gray-256" ${s.dithering?.palette === 'gray-256' ? 'selected' : ''}>8-bit (256 grays)</option>
+              <option value="color-6a" ${s.dithering?.palette === 'color-6a' ? 'selected' : ''}>6-color (Inky 13.3)</option>
+              <option value="color-7a" ${s.dithering?.palette === 'color-7a' ? 'selected' : ''}>7-color (Inky 7.3)</option>
             </select>
             <p class="text-xs text-gray-500 mt-1">Match your display: 1-bit (classic), 4-grays (TRMNL), 16-grays (high-res), or color (Pimoroni Inky)</p>
           </div>
 
           <div class="flex items-center">
-            <input type="checkbox" id="s_gamma" ${
-              s.dithering?.gammaCorrection ? 'checked' : ''
-            }
+            <input type="checkbox" id="s_gamma" ${s.dithering?.gammaCorrection ? 'checked' : ''}
               class="h-4 w-4 border-gray-300 rounded"
               onchange="window.app.updateScheduleFromForm()"
               title="Removes color profiles to linearize brightness for e-ink displays" />
@@ -553,9 +501,7 @@ export class RenderScheduleContent {
             <label class="block text-sm font-medium text-gray-700 mb-1">Black Level: <span id="black_val">${
               s.dithering?.blackLevel ?? 0
             }</span>%</label>
-            <input type="range" id="s_black" min="0" max="50" value="${
-              s.dithering?.blackLevel ?? 0
-            }"
+            <input type="range" id="s_black" min="0" max="50" value="${s.dithering?.blackLevel ?? 0}"
               class="w-full"
               oninput="document.getElementById('black_val').textContent=this.value"
               onchange="window.app.updateScheduleFromForm()"
@@ -567,9 +513,7 @@ export class RenderScheduleContent {
             <label class="block text-sm font-medium text-gray-700 mb-1">White Level: <span id="white_val">${
               s.dithering?.whiteLevel ?? 100
             }</span>%</label>
-            <input type="range" id="s_white" min="50" max="100" value="${
-              s.dithering?.whiteLevel ?? 100
-            }"
+            <input type="range" id="s_white" min="50" max="100" value="${s.dithering?.whiteLevel ?? 100}"
               class="w-full"
               oninput="document.getElementById('white_val').textContent=this.value"
               onchange="window.app.updateScheduleFromForm()"
@@ -579,17 +523,13 @@ export class RenderScheduleContent {
 
           <div class="flex items-center gap-4">
             <label class="flex items-center" title="Stretches histogram so darkest pixel→black, brightest→white">
-              <input type="checkbox" id="s_normalize" ${
-                s.dithering?.normalize ? 'checked' : ''
-              }
+              <input type="checkbox" id="s_normalize" ${s.dithering?.normalize ? 'checked' : ''}
                 class="h-4 w-4 border-gray-300 rounded"
                 onchange="window.app.updateScheduleFromForm()" />
               <span class="ml-2 text-sm text-gray-700">Normalize</span>
             </label>
             <label class="flex items-center" title="Boost saturation by 50% for more vivid colors on e-ink">
-              <input type="checkbox" id="s_saturation" ${
-                s.dithering?.saturationBoost ? 'checked' : ''
-              }
+              <input type="checkbox" id="s_saturation" ${s.dithering?.saturationBoost ? 'checked' : ''}
                 class="h-4 w-4 border-gray-300 rounded"
                 onchange="window.app.updateScheduleFromForm()" />
               <span class="ml-2 text-sm text-gray-700">Saturation Boost</span>
