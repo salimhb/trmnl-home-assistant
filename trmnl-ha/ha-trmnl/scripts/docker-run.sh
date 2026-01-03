@@ -12,8 +12,24 @@ IMAGE_NAME="trmnl-ha"
 VOLUME_DIR="/tmp/trmnl-data"
 PORT="10000"
 
+# Resolve paths relative to script location
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+OPTIONS_DEV="${SCRIPT_DIR}/../options-dev.json"
+OPTIONS_MOUNT=""
+
 echo -e "${BLUE}🚀 Starting TRMNL HA container...${NC}"
 echo ""
+
+# Check for options-dev.json and mount it if present
+if [ -f "$OPTIONS_DEV" ]; then
+  echo -e "${GREEN}📄 Using local options-dev.json${NC}"
+  OPTIONS_MOUNT="-v ${OPTIONS_DEV}:/data/options.json:ro"
+else
+  echo -e "${YELLOW}⚠️  No options-dev.json found${NC}"
+  echo "   Copy options-dev.json.example to options-dev.json and configure it"
+  echo "   The file should be at: ${OPTIONS_DEV}"
+  echo ""
+fi
 
 # Check if container already exists
 if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
@@ -42,6 +58,7 @@ docker run -d \
   --log-opt max-file=3 \
   -p "${PORT}:${PORT}" \
   -v "${VOLUME_DIR}:/data" \
+  ${OPTIONS_MOUNT} \
   "${IMAGE_NAME}"
 
 echo ""
@@ -50,6 +67,11 @@ echo ""
 echo "Container: ${CONTAINER_NAME}"
 echo "Port:      ${PORT}"
 echo "Volume:    ${VOLUME_DIR} → /data"
+if [ -n "$OPTIONS_MOUNT" ]; then
+  echo "Config:    options-dev.json (local file)"
+else
+  echo "Config:    ${VOLUME_DIR}/options.json"
+fi
 echo ""
 echo "Next steps:"
 echo "  ./scripts/docker-health.sh    - Check health status"

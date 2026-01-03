@@ -74,10 +74,14 @@ export class ScheduleManager {
    * Creates new schedule with sensible defaults.
    */
   async create(): Promise<Schedule> {
+    // @ts-expect-error window.uiConfig is injected by server
+    const uiConfig = window.uiConfig || { haConnected: false }
+
     const defaultSchedule: ScheduleInput = {
       name: 'New Schedule',
       enabled: true,
       cron: '*/10 * * * *',
+      ha_mode: uiConfig.haConnected, // Default to HA mode if connected
       dashboard_path: '/home',
       viewport: { width: 800, height: 480 },
       webhook_url: '',

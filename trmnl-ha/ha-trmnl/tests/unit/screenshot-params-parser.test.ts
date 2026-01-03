@@ -548,6 +548,60 @@ describe('ScreenshotParamsParser', () => {
   })
 
   // ==========================================================================
+  // Target URL Parameter - Generic mode (full URL override)
+  // ==========================================================================
+
+  describe('Target URL Parameter', () => {
+    it('parses url parameter for generic mode', () => {
+      const url = createUrl('/', {
+        viewport: '800x600',
+        url: 'https://grafana.local/dashboard',
+      })
+
+      const result = parser.call(url)
+
+      expect(result!.targetUrl).toBe('https://grafana.local/dashboard')
+    })
+
+    it('sets targetUrl to undefined when absent', () => {
+      const url = createUrl('/lovelace/0', { viewport: '800x600' })
+
+      const result = parser.call(url)
+
+      expect(result!.targetUrl).toBeUndefined()
+    })
+
+    it('includes pagePath alongside targetUrl', () => {
+      const url = createUrl('/some-path', {
+        viewport: '800x600',
+        url: 'https://example.com',
+      })
+
+      const result = parser.call(url)
+
+      expect(result!.pagePath).toBe('/some-path')
+      expect(result!.targetUrl).toBe('https://example.com')
+    })
+
+    it('works with all other parameters', () => {
+      const url = createUrl('/', {
+        viewport: '800x600',
+        url: 'https://status.github.com',
+        dithering: true,
+        format: 'jpeg',
+        invert: true,
+      })
+
+      const result = parser.call(url)
+
+      expect(result!.targetUrl).toBe('https://status.github.com')
+      expect(result!.dithering!.enabled).toBe(true)
+      expect(result!.format).toBe('jpeg')
+      expect(result!.invert).toBe(true)
+    })
+  })
+
+  // ==========================================================================
   // Complete Example - Full parameter set
   // ==========================================================================
 

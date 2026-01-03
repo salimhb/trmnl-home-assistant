@@ -6,6 +6,24 @@ Send Home Assistant dashboard screenshots to your TRMNL e-ink display with advan
 
 [![Add repository to Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fusetrmnl%2Ftrmnl-home-assistant)
 
+## Use Without Home Assistant
+
+This add-on can capture screenshots from **any website**, not just Home Assistant dashboards.
+
+```bash
+# 1. Configure your target URL
+cp ha-trmnl/options-dev.json.example ha-trmnl/options-dev.json
+# Edit options-dev.json: set "home_assistant_url" to your website
+
+# 2. Build and run
+./ha-trmnl/scripts/docker-dev.sh
+
+# 3. Capture screenshots
+curl "http://localhost:10000/dashboard?viewport=800x480&dithering"
+```
+
+See [Standalone Mode](DOCS.md#standalone-mode) for detailed setup.
+
 ## Features
 
 - **E-ink optimized dithering** - Floyd-Steinberg and Ordered algorithms for crisp e-paper rendering

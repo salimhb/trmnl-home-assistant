@@ -310,7 +310,6 @@ describe('params-builder', () => {
       const defaults = getDefaults()
 
       expect(defaults).toMatchObject({
-        pagePath: '/lovelace/0',
         viewport: { width: 758, height: 1024 },
         format: 'png',
         zoom: 1,

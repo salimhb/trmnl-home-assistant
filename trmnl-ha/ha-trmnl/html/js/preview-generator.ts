@@ -13,6 +13,7 @@
  */
 
 import { FetchPreview } from './api-client.js'
+import { resolveScreenshotTarget } from '../shared/screenshot-target.js'
 import type { Schedule } from '../../types/domain.js'
 
 /**
@@ -47,7 +48,10 @@ export class PreviewGenerator {
   #buildUrlParams(schedule: Schedule): URLSearchParams {
     const params = new URLSearchParams()
 
-    params.append('viewport', `${schedule.viewport.width}x${schedule.viewport.height}`)
+    params.append(
+      'viewport',
+      `${schedule.viewport.width}x${schedule.viewport.height}`
+    )
 
     if (schedule.format && schedule.format !== 'png') {
       params.append('format', schedule.format)
@@ -87,7 +91,10 @@ export class PreviewGenerator {
 
     if (schedule.dithering?.enabled) {
       params.append('dithering', '')
-      params.append('dither_method', schedule.dithering.method || 'floyd-steinberg')
+      params.append(
+        'dither_method',
+        schedule.dithering.method || 'floyd-steinberg'
+      )
 
       params.append('palette', schedule.dithering.palette || 'gray-4')
 
@@ -151,7 +158,9 @@ export class PreviewGenerator {
    * Displays loaded image with metadata.
    */
   #displayImage(imageUrl: string, loadTimeMs: number): void {
-    const image = document.getElementById('previewImage') as HTMLImageElement | null
+    const image = document.getElementById(
+      'previewImage'
+    ) as HTMLImageElement | null
     const loadTime = document.getElementById('loadTime')
     const dimensions = document.getElementById('previewDimensions')
 
@@ -195,8 +204,14 @@ export class PreviewGenerator {
 
     try {
       const params = this.#buildUrlParams(schedule)
+      const target = resolveScreenshotTarget(schedule)
 
-      const blob = await this.#fetchPreviewCmd.call(schedule.dashboard_path, params)
+      // Add full URL param for generic mode
+      if (target.fullUrl) {
+        params.append('url', target.fullUrl)
+      }
+
+      const blob = await this.#fetchPreviewCmd.call(target.path, params)
       const imageUrl = URL.createObjectURL(blob)
 
       const endTime = performance.now()

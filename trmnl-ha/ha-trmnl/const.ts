@@ -34,7 +34,7 @@ const optionsFile = ['./options-dev.json', '/data/options.json'].find(
 
 if (!optionsFile) {
   console.error(
-    'No options file found. Please copy options-dev.json.sample to options-dev.json'
+    'No options file found. Please copy options-dev.json.example to options-dev.json'
   )
   process.exit(1)
 }
@@ -85,7 +85,9 @@ export const hassToken: string | undefined = useMockHA
   ? 'mock-token-for-testing' // Any token works with mock server
   : options.access_token
 
-if (!hassToken && !useMockHA) {
+// Only warn about missing token when running as HA add-on (where it's required)
+// Standalone users may intentionally skip the token for generic URL screenshots
+if (!hassToken && !useMockHA && isAddOn) {
   console.warn(
     'No access token configured. UI will show configuration instructions.'
   )

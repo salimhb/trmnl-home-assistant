@@ -23,11 +23,15 @@ const log = navigationLogger()
 export type AuthStorage = Record<string, string>
 
 /**
- * Navigates to Home Assistant pages with authentication injection and client-side routing.
+ * Navigates to pages with optional Home Assistant authentication injection.
  *
- * Two Navigation Modes:
+ * Supports two modes:
+ * 1. HA Mode: Resolves pagePath against base URL, injects HA auth tokens
+ * 2. Generic Mode: Uses targetUrl directly, skips auth injection
+ *
+ * Navigation Strategies:
  * 1. First Navigation: Injects auth tokens via evaluateOnNewDocument(), then page.goto()
- * 2. Subsequent Navigation: Uses client-side router (real HA) or page.goto() (mock HA)
+ * 2. Subsequent Navigation: Uses client-side router (real HA) or page.goto() (mock/generic)
  */
 export class NavigateToPage {
   #page: Page
@@ -41,61 +45,93 @@ export class NavigateToPage {
   }
 
   /**
-   * Navigates to specified page path.
+   * Navigates to specified page.
    *
    * @param pagePath - Page path relative to HA base (e.g., "/lovelace/kitchen")
-   * @param isFirstNavigation - True for first navigation (inject auth)
+   * @param isFirstNavigation - True for first navigation (inject auth if applicable)
+   * @param targetUrl - Full URL to navigate to (overrides pagePath resolution)
    * @returns Recommended wait time in milliseconds
    * @throws CannotOpenPageError If navigation fails
    */
   async call(
     pagePath: string,
-    isFirstNavigation: boolean = false
+    isFirstNavigation: boolean = false,
+    targetUrl?: string
   ): Promise<NavigationResult> {
     if (isFirstNavigation) {
-      return this.#firstNavigation(pagePath)
+      return this.#firstNavigation(pagePath, targetUrl)
     } else {
-      return this.#subsequentNavigation(pagePath)
+      return this.#subsequentNavigation(pagePath, targetUrl)
     }
   }
 
-  async #firstNavigation(pagePath: string): Promise<NavigationResult> {
-    const evaluateId = await this.#page.evaluateOnNewDocument(
-      (storage: AuthStorage) => {
-        for (const [key, value] of Object.entries(storage)) {
-          localStorage.setItem(key, value)
-        }
-      },
-      this.#authStorage
-    )
+  /**
+   * Determines if HA auth should be injected for a given URL.
+   * Only inject auth when navigating to the configured HA instance.
+   */
+  #shouldInjectAuth(pageUrl: string): boolean {
+    return pageUrl.startsWith(this.#homeAssistantUrl)
+  }
 
-    const pageUrl = new URL(pagePath, this.#homeAssistantUrl).toString()
+  async #firstNavigation(
+    pagePath: string,
+    targetUrl?: string
+  ): Promise<NavigationResult> {
+    // Resolve the final URL: use targetUrl if provided, otherwise resolve against HA base
+    const pageUrl = targetUrl || new URL(pagePath, this.#homeAssistantUrl).toString()
+    const injectAuth = this.#shouldInjectAuth(pageUrl)
+
+    let evaluateId: { identifier: string } | undefined
+
+    // Only inject HA auth when navigating to the configured HA instance
+    if (injectAuth) {
+      evaluateId = await this.#page.evaluateOnNewDocument(
+        (storage: AuthStorage) => {
+          for (const [key, value] of Object.entries(storage)) {
+            localStorage.setItem(key, value)
+          }
+        },
+        this.#authStorage
+      )
+    }
 
     let response
     try {
       response = await this.#page.goto(pageUrl)
     } catch (err) {
-      this.#page.removeScriptToEvaluateOnNewDocument(evaluateId.identifier)
+      if (evaluateId) {
+        this.#page.removeScriptToEvaluateOnNewDocument(evaluateId.identifier)
+      }
       throw new CannotOpenPageError(0, pageUrl, (err as Error).message)
     }
 
     if (!response?.ok()) {
-      this.#page.removeScriptToEvaluateOnNewDocument(evaluateId.identifier)
+      if (evaluateId) {
+        this.#page.removeScriptToEvaluateOnNewDocument(evaluateId.identifier)
+      }
       throw new CannotOpenPageError(response?.status() ?? 0, pageUrl)
     }
 
-    this.#page.removeScriptToEvaluateOnNewDocument(evaluateId.identifier)
+    if (evaluateId) {
+      this.#page.removeScriptToEvaluateOnNewDocument(evaluateId.identifier)
+    }
 
     return {
       waitTime: DEFAULT_WAIT_TIME + (isAddOn ? COLD_START_EXTRA_WAIT : 0),
     }
   }
 
-  async #subsequentNavigation(pagePath: string): Promise<NavigationResult> {
+  async #subsequentNavigation(
+    pagePath: string,
+    targetUrl?: string
+  ): Promise<NavigationResult> {
+    // For generic URLs or mock HA, always use page.goto()
+    // For real HA, use client-side navigation
+    const isGenericUrl = !!targetUrl
     const isMockHA = this.#page.url().includes('localhost:8123')
 
-    if (isMockHA) {
-      const pageUrl = new URL(pagePath, this.#homeAssistantUrl).toString()
+    if (isGenericUrl || isMockHA) {
+      const pageUrl = targetUrl || new URL(pagePath, this.#homeAssistantUrl).toString()
 
       let response
       try {

@@ -14,7 +14,7 @@ import {
   createLongLivedTokenAuth,
 } from 'home-assistant-js-websocket'
 import type { HassConfig, Connection } from 'home-assistant-js-websocket'
-import { hassUrl, hassToken, isAddOn } from './const.js'
+import { hassUrl, hassToken } from './const.js'
 import { loadPresets } from './devices.js'
 import type { PresetsConfig } from './types/domain.js'
 import { uiLogger } from './lib/logger.js'
@@ -29,7 +29,6 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const HTML_DIR = join(__dirname, 'html')
-const CONFIG_FILE = isAddOn ? '/data/options.json' : 'options-dev.json'
 
 // =============================================================================
 // TYPES
@@ -63,6 +62,14 @@ interface HomeAssistantData {
   presets?: PresetsConfig
 }
 
+/** UI configuration passed to frontend */
+interface UIConfig {
+  hasToken: boolean
+  hassUrl: string
+  /** Whether HA connection succeeded (themes/dashboards available) */
+  haConnected: boolean
+}
+
 // =============================================================================
 // HELPER FUNCTIONS
 // =============================================================================
@@ -82,44 +89,28 @@ function sendHtmlResponse(
   response.end(html)
 }
 
-/**
- * Generates HTML instructions for configuring access token
- */
-function generateConfigInstructions(action: 'Configure' | 'Update'): string {
-  if (isAddOn) {
-    return `
-      <li>
-        <strong>${action} the Add-on Configuration:</strong>
-        <ul class="ml-6 mt-2 space-y-1 list-disc list-inside text-sm">
-          <li>Go to Settings → Add-ons</li>
-          <li>Click on the TRMNL HA add-on</li>
-          <li>Go to the Configuration tab</li>
-          <li>${
-            action === 'Configure' ? 'Paste' : 'Update'
-          } your token in the "access_token" field</li>
-          <li>Save and restart the add-on</li>
-        </ul>
-      </li>`
-  }
-
-  return `
-      <li>
-        <strong>${
-          action === 'Configure' ? 'Add to' : 'Update'
-        } Configuration File:</strong>
-        <ul class="ml-6 mt-2 space-y-1 list-disc list-inside text-sm">
-          <li>Open the file: <code class="bg-gray-100 px-2 py-1 rounded">${CONFIG_FILE}</code></li>
-          <li>${
-            action === 'Configure' ? 'Add or update' : 'Update'
-          } the <code class="bg-gray-100 px-2 py-1 rounded">access_token</code> field with your token</li>
-          <li>Save the file and restart the service</li>
-        </ul>
-      </li>`
-}
-
 // =============================================================================
 // HOME ASSISTANT DATA FETCHING
 // =============================================================================
+
+/** Timeout for HA connection attempts (5 seconds) */
+const HA_CONNECTION_TIMEOUT = 5000
+
+/**
+ * Wraps a promise with a timeout
+ */
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  message: string
+): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(message)), ms)
+    ),
+  ])
+}
 
 /**
  * Fetches configuration data from Home Assistant via WebSocket and REST API
@@ -132,7 +123,11 @@ async function fetchHomeAssistantData(): Promise<HomeAssistantData> {
     }`
 
     const auth = createLongLivedTokenAuth(hassUrl, hassToken!)
-    const connection: Connection = await createConnection({ auth })
+    const connection: Connection = await withTimeout(
+      createConnection({ auth }),
+      HA_CONNECTION_TIMEOUT,
+      `HA connection timeout after ${HA_CONNECTION_TIMEOUT}ms`
+    )
 
     const [themesResult, networkResult, dashboardsResult] = await Promise.all([
       connection.sendMessagePromise<ThemesResult>({
@@ -198,63 +193,37 @@ async function fetchHomeAssistantData(): Promise<HomeAssistantData> {
 }
 
 // =============================================================================
-// ERROR PAGE HANDLERS
-// =============================================================================
-
-/**
- * Serves the missing configuration error page
- */
-async function serveMissingConfigPage(response: ServerResponse): Promise<void> {
-  const htmlPath = join(HTML_DIR, 'error_missing_config.html')
-  let html = await readFile(htmlPath, 'utf-8')
-
-  html = html.replace(
-    '{{CONFIG_INSTRUCTIONS}}',
-    generateConfigInstructions('Configure')
-  )
-  html = html.replace('{{HASS_URL}}', hassUrl)
-
-  sendHtmlResponse(response, html)
-}
-
-/**
- * Serves the connection failed error page
- */
-async function serveConnectionFailedPage(
-  response: ServerResponse
-): Promise<void> {
-  const htmlPath = join(HTML_DIR, 'error_connection_failed.html')
-  let html = await readFile(htmlPath, 'utf-8')
-
-  html = html.replace(
-    '{{CONFIG_INSTRUCTIONS}}',
-    generateConfigInstructions('Update')
-  )
-  html = html.replace(/{{HASS_URL}}/g, hassUrl)
-  html = html.replace('{{TOKEN_LENGTH}}', String(hassToken?.length || 0))
-
-  sendHtmlResponse(response, html)
-}
-
-// =============================================================================
 // MAIN UI HANDLER
 // =============================================================================
 
 /**
  * Handles requests for the web UI
+ *
+ * Always serves the main UI - no blocking error pages.
+ * Connection status is passed to frontend for inline messaging.
  */
 export async function handleUIRequest(response: ServerResponse): Promise<void> {
   try {
-    if (!hassToken) {
-      await serveMissingConfigPage(response)
-      return
+    // Attempt HA connection if token is configured
+    let hassData: HomeAssistantData = {
+      themes: null,
+      network: null,
+      config: null,
+      dashboards: null,
     }
 
-    const hassData = await fetchHomeAssistantData()
+    if (hassToken) {
+      hassData = await fetchHomeAssistantData()
+    }
 
-    if (!hassData.themes || !hassData.network || !hassData.config) {
-      await serveConnectionFailedPage(response)
-      return
+    // Determine if HA connection succeeded
+    const haConnected = !!(hassData.themes && hassData.config)
+
+    // Build UI config for frontend
+    const uiConfig: UIConfig = {
+      hasToken: !!hassToken,
+      hassUrl,
+      haConnected,
     }
 
     const htmlPath = join(HTML_DIR, 'index.html')
@@ -267,11 +236,11 @@ export async function handleUIRequest(response: ServerResponse): Promise<void> {
         presets,
       }
 
-    const scriptTag = `<script>window.hass = ${JSON.stringify(
-      hassDataWithDevices,
-      null,
-      2
-    )};</script>`
+    // Inject both HA data and UI config into the page
+    const scriptTag = `<script>
+window.hass = ${JSON.stringify(hassDataWithDevices, null, 2)};
+window.uiConfig = ${JSON.stringify(uiConfig)};
+</script>`
     html = html.replace('</head>', `${scriptTag}\n  </head>`)
 
     sendHtmlResponse(response, html)

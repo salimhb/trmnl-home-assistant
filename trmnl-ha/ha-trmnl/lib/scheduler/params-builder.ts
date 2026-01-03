@@ -13,10 +13,10 @@ import type {
   Viewport,
   ImageFormat,
 } from '../../types/domain.js'
+import { resolveScreenshotTarget } from '../../html/shared/screenshot-target.js'
 
 /** Default screenshot parameters */
 const DEFAULTS = {
-  pagePath: '/lovelace/0',
   viewport: { width: 758, height: 1024 } as Viewport,
   extraWait: undefined as number | undefined,
   invert: false,
@@ -32,8 +32,11 @@ const DEFAULTS = {
  * @returns Screenshot request params
  */
 export function buildParams(schedule: Schedule): ScreenshotParams {
+  const target = resolveScreenshotTarget(schedule)
+
   return {
-    pagePath: schedule.dashboard_path || DEFAULTS.pagePath,
+    pagePath: target.path,
+    targetUrl: target.fullUrl,
     format: schedule.format || DEFAULTS.format,
     viewport: schedule.viewport ?? DEFAULTS.viewport,
     crop: schedule.crop?.enabled ? schedule.crop : null,

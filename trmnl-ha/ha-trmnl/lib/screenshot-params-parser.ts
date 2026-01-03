@@ -20,6 +20,8 @@ import type {
 /** Parsed screenshot parameters */
 export interface ParsedScreenshotParams {
   pagePath: string
+  /** Full target URL (if provided, overrides pagePath + base URL resolution) */
+  targetUrl?: string
   viewport: Viewport
   extraWait?: number
   zoom: number
@@ -48,8 +50,12 @@ export class ScreenshotParamsParser {
     const viewport = this.#parseViewport(requestUrl)
     if (!viewport) return null
 
+    // Full URL param for generic (non-HA) screenshots
+    const targetUrl = requestUrl.searchParams.get('url') || undefined
+
     return {
       pagePath: requestUrl.pathname,
+      targetUrl,
       viewport,
       ...this.#parseProcessing(requestUrl),
       ...this.#parseDithering(requestUrl),

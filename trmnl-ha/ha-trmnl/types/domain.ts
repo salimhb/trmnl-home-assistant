@@ -72,6 +72,9 @@ export interface ScreenshotParams {
   /** Dashboard page path (e.g., "/lovelace/default") */
   pagePath: string
 
+  /** Full target URL (if provided, overrides pagePath + base URL resolution) */
+  targetUrl?: string
+
   /** Viewport dimensions */
   viewport: Viewport
 
@@ -137,8 +140,14 @@ export interface Schedule {
   /** Custom headers for webhook requests */
   webhook_headers?: Record<string, string>
 
-  /** Dashboard page path */
+  /** Whether to use Home Assistant mode (true) or generic URL mode (false) */
+  ha_mode: boolean
+
+  /** Dashboard page path (used in HA mode) */
   dashboard_path: string
+
+  /** Full target URL (used in generic mode, overrides dashboard_path) */
+  target_url?: string
 
   /** Viewport dimensions */
   viewport: Viewport

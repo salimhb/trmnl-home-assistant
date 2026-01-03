@@ -14,13 +14,21 @@
  */
 
 import { ScheduleManager } from './schedule-manager.js'
-import { RenderTabs, RenderEmptyState, RenderScheduleContent } from './ui-renderer.js'
+import {
+  RenderTabs,
+  RenderEmptyState,
+  RenderScheduleContent,
+} from './ui-renderer.js'
 import { PreviewGenerator } from './preview-generator.js'
 import { CropModal } from './crop-modal.js'
 import { ConfirmModal } from './confirm-modal.js'
 import { DevicePresetsManager } from './device-presets.js'
 import { SendSchedule } from './api-client.js'
-import type { Schedule, CropRegion, ScheduleUpdate } from '../../types/domain.js'
+import type {
+  Schedule,
+  CropRegion,
+  ScheduleUpdate,
+} from '../../types/domain.js'
 
 // =============================================================================
 // FORM PARSING HELPERS
@@ -30,7 +38,10 @@ import type { Schedule, CropRegion, ScheduleUpdate } from '../../types/domain.js
  * Safely parse integer from form input, returning default only for empty/NaN.
  * Unlike `parseInt(value) || default`, this preserves 0 as a valid value.
  */
-function parseIntOrDefault(value: string | undefined, defaultValue: number): number {
+function parseIntOrDefault(
+  value: string | undefined,
+  defaultValue: number
+): number {
   if (!value || value.trim() === '') return defaultValue
   const parsed = parseInt(value, 10)
   return isNaN(parsed) ? defaultValue : parsed
@@ -40,7 +51,10 @@ function parseIntOrDefault(value: string | undefined, defaultValue: number): num
  * Safely parse float from form input, returning default only for empty/NaN.
  * Unlike `parseFloat(value) || default`, this preserves 0 as a valid value.
  */
-function parseFloatOrDefault(value: string | undefined, defaultValue: number): number {
+function parseFloatOrDefault(
+  value: string | undefined,
+  defaultValue: number
+): number {
   if (!value || value.trim() === '') return defaultValue
   const parsed = parseFloat(value)
   return isNaN(parsed) ? defaultValue : parsed
@@ -82,6 +96,9 @@ class App {
 
   async init(): Promise<void> {
     try {
+      // Show HA status banner if not connected
+      this.#updateHAStatusBanner()
+
       await this.#scheduleManager.loadAll()
       this.renderUI()
 
@@ -96,6 +113,23 @@ class App {
     } catch (err) {
       console.error('Error initializing app:', err)
       this.#showError('Failed to load schedules')
+    }
+  }
+
+  /**
+   * Shows/hides the HA status banner based on connection status.
+   */
+  #updateHAStatusBanner(): void {
+    const banner = document.getElementById('haStatusBanner')
+    if (!banner) return
+
+    // @ts-expect-error window.uiConfig is injected by server
+    const uiConfig = window.uiConfig || { haConnected: false }
+
+    if (uiConfig.haConnected) {
+      banner.classList.add('hidden')
+    } else {
+      banner.classList.remove('hidden')
     }
   }
 
@@ -248,14 +282,22 @@ class App {
     const select = (id: string) =>
       (document.getElementById(id) as HTMLSelectElement | null)?.value
 
+    // Check if in HA mode or generic mode from the toggle
+    // When toggle is checked = HA mode, unchecked = generic mode
+    const haModeCheckbox = document.getElementById(
+      's_ha_mode'
+    ) as HTMLInputElement | null
+    const isHAMode = haModeCheckbox?.checked ?? true // default to HA mode if checkbox missing
+
     return {
       ...schedule,
-      // Strings: use || for empty string fallback
+      // Mode toggle - always save the current state
+      ha_mode: isHAMode,
+
+      // Common fields (always update from form)
       name: input('s_name') || schedule.name,
       cron: input('s_cron') || schedule.cron,
       webhook_url: input('s_webhook') || null,
-      dashboard_path: input('s_path') || schedule.dashboard_path,
-      // Numbers: use helper to preserve 0 as valid value
       viewport: {
         width: parseIntOrDefault(input('s_width'), schedule.viewport.width),
         height: parseIntOrDefault(input('s_height'), schedule.viewport.height),
@@ -264,30 +306,44 @@ class App {
         enabled: checkbox('s_crop_enabled'),
         x: parseIntOrDefault(input('s_crop_x'), 0),
         y: parseIntOrDefault(input('s_crop_y'), 0),
-        width: parseIntOrDefault(input('s_crop_width'), schedule.viewport.width),
-        height: parseIntOrDefault(input('s_crop_height'), schedule.viewport.height),
+        width: parseIntOrDefault(
+          input('s_crop_width'),
+          schedule.viewport.width
+        ),
+        height: parseIntOrDefault(
+          input('s_crop_height'),
+          schedule.viewport.height
+        ),
       },
       format: (select('s_format') as 'png' | 'jpeg' | 'bmp') || schedule.format,
       rotate: this.#parseRotation(select('s_rotate')),
       zoom: parseFloatOrDefault(input('s_zoom'), 1),
       wait: this.#parseWait(input('s_wait')),
-      // Strings: use || for empty string fallback to null
-      theme: select('s_theme') || null,
-      lang: input('s_lang') || null,
-      // Booleans: use ?? to preserve explicit false
-      dark: checkbox('s_dark'),
       invert: checkbox('s_invert'),
       dithering: {
         enabled: checkbox('s_dithering'),
         method: select('s_method') || 'floyd-steinberg',
         palette: select('s_palette') || 'gray-4',
         gammaCorrection:
-          (document.getElementById('s_gamma') as HTMLInputElement | null)?.checked ?? true,
+          (document.getElementById('s_gamma') as HTMLInputElement | null)
+            ?.checked ?? true,
         blackLevel: parseIntOrDefault(input('s_black'), 0),
         whiteLevel: parseIntOrDefault(input('s_white'), 100),
         normalize: checkbox('s_normalize'),
         saturationBoost: checkbox('s_saturation'),
       },
+
+      // Mode-specific fields: only update when in that mode, otherwise preserve existing
+      // HA mode fields - only read from form when in HA mode
+      dashboard_path: isHAMode
+        ? input('s_path') || schedule.dashboard_path
+        : schedule.dashboard_path,
+      theme: isHAMode ? select('s_theme') || null : schedule.theme,
+      dark: isHAMode ? checkbox('s_dark') : schedule.dark,
+      lang: isHAMode ? input('s_lang') || null : schedule.lang,
+
+      // Generic mode fields - only read from form when in generic mode
+      target_url: isHAMode ? undefined : input('s_target_url') || undefined,
     }
   }
 
@@ -372,11 +428,21 @@ class App {
   }
 
   #updateCropFormInputs(crop: CropSettings): void {
-    const cropEnabledInput = document.getElementById('s_crop_enabled') as HTMLInputElement | null
-    const cropXInput = document.getElementById('s_crop_x') as HTMLInputElement | null
-    const cropYInput = document.getElementById('s_crop_y') as HTMLInputElement | null
-    const cropWidthInput = document.getElementById('s_crop_width') as HTMLInputElement | null
-    const cropHeightInput = document.getElementById('s_crop_height') as HTMLInputElement | null
+    const cropEnabledInput = document.getElementById(
+      's_crop_enabled'
+    ) as HTMLInputElement | null
+    const cropXInput = document.getElementById(
+      's_crop_x'
+    ) as HTMLInputElement | null
+    const cropYInput = document.getElementById(
+      's_crop_y'
+    ) as HTMLInputElement | null
+    const cropWidthInput = document.getElementById(
+      's_crop_width'
+    ) as HTMLInputElement | null
+    const cropHeightInput = document.getElementById(
+      's_crop_height'
+    ) as HTMLInputElement | null
 
     if (cropEnabledInput) cropEnabledInput.checked = crop.enabled
     if (cropXInput) cropXInput.value = String(crop.x)
@@ -417,6 +483,27 @@ class App {
 
   applyDashboardSelection(): void {
     this.#devicePresetsManager.applyDashboardSelection()
+  }
+
+  // =============================================================================
+  // HA MODE TOGGLE
+  // =============================================================================
+
+  /**
+   * Toggles between Home Assistant mode and Generic URL mode.
+   * Saves the mode to config and refreshes the UI.
+   */
+  async toggleHAMode(enabled: boolean): Promise<void> {
+    // Clear target_url when switching to HA mode
+    if (enabled) {
+      const targetUrlInput = document.getElementById(
+        's_target_url'
+      ) as HTMLInputElement | null
+      if (targetUrlInput) targetUrlInput.value = ''
+    }
+
+    // Save the schedule with new ha_mode value and re-render
+    await this.updateScheduleFromForm()
   }
 
   // =============================================================================

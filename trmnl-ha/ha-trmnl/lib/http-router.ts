@@ -107,7 +107,8 @@ export class HttpRouter {
       return true
     }
 
-    if (pathname === '/') {
+    // Serve UI at root UNLESS there's a 'url' param (generic screenshot mode)
+    if (pathname === '/' && !requestUrl.searchParams.has('url')) {
       await handleUIRequest(response)
       return true
     }
@@ -127,7 +128,11 @@ export class HttpRouter {
       return this.#handlePresetsAPI(response)
     }
 
-    if (pathname.startsWith('/js/') || pathname.startsWith('/css/')) {
+    if (
+      pathname.startsWith('/js/') ||
+      pathname.startsWith('/css/') ||
+      pathname.startsWith('/shared/')
+    ) {
       return this.#handleStaticFile(response, pathname)
     }
 

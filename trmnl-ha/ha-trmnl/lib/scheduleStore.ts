@@ -74,6 +74,18 @@ async function fileExists(filePath: string): Promise<boolean> {
 }
 
 /**
+ * Migrates schedule data to add any missing fields with defaults.
+ * Ensures backward compatibility when new fields are added.
+ */
+function migrateSchedule(schedule: Partial<Schedule>): Schedule {
+  return {
+    ...schedule,
+    // Default ha_mode based on whether target_url is set (for existing schedules)
+    ha_mode: schedule.ha_mode ?? !schedule.target_url,
+  } as Schedule
+}
+
+/**
  * Load schedules from JSON file
  */
 export async function loadSchedules(
@@ -82,7 +94,9 @@ export async function loadSchedules(
   try {
     if (await fileExists(filePath)) {
       const data = await fs.readFile(filePath, 'utf-8')
-      return JSON.parse(data) as Schedule[]
+      const schedules = JSON.parse(data) as Partial<Schedule>[]
+      // Migrate any schedules missing new fields
+      return schedules.map(migrateSchedule)
     }
   } catch (err) {
     log.error`Error loading schedules: ${err}`
@@ -157,12 +171,12 @@ export async function createSchedule(
 
   return withLock(filePath, async () => {
     const schedules = await loadSchedules(filePath)
-    const newSchedule: Schedule = {
+    const newSchedule: Schedule = migrateSchedule({
       ...data,
       id: generateId(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-    }
+    })
     schedules.push(newSchedule)
     await saveSchedules(filePath, schedules)
     return newSchedule

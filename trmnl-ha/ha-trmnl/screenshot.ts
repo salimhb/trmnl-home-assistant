@@ -133,6 +133,8 @@ const PUPPETEER_ARGS: string[] = [
 /** Navigation parameters for navigatePage() */
 export interface NavigateParams {
   pagePath: string
+  /** Full target URL (if provided, overrides pagePath + base URL resolution) */
+  targetUrl?: string
   viewport: Viewport
   extraWait?: number
   zoom?: number
@@ -341,10 +343,13 @@ export class Browser {
   // ===========================================================================
 
   /**
-   * Navigates to Home Assistant page and applies configuration (lang, theme, zoom).
+   * Navigates to page and applies configuration (lang, theme, zoom).
+   * If targetUrl is provided, navigates directly to that URL (generic mode).
+   * Otherwise, resolves pagePath against the configured base URL (HA mode).
    */
   async navigatePage({
     pagePath,
+    targetUrl,
     viewport,
     extraWait,
     zoom = 1,
@@ -377,10 +382,11 @@ export class Browser {
       let waitTime = 0
       const isFirstNavigation = this.#lastRequestedPath === undefined
 
-      // Navigate to page if path changed
+      // Navigate to page if path changed (or different targetUrl)
+      const effectivePath = targetUrl || pagePath
       if (
         this.#lastRequestedPath === undefined ||
-        this.#lastRequestedPath !== pagePath
+        this.#lastRequestedPath !== effectivePath
       ) {
         const authStorage = this.#buildAuthStorage()
         const navigateCmd = new NavigateToPage(
@@ -388,9 +394,13 @@ export class Browser {
           authStorage,
           this.#homeAssistantUrl
         )
-        const result = await navigateCmd.call(pagePath, isFirstNavigation)
+        const result = await navigateCmd.call(
+          pagePath,
+          isFirstNavigation,
+          targetUrl
+        )
         waitTime = result.waitTime
-        this.#lastRequestedPath = pagePath
+        this.#lastRequestedPath = effectivePath
       }
 
       const waitLoadCmd = new WaitForPageLoad(page)

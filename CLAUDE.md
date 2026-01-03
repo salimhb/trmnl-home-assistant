@@ -39,9 +39,9 @@ bun run mock:server         # Start mock HA on localhost:8123
 MOCK_HA=true bun run dev    # Run app with mock HA
 
 # Docker Development
-./scripts/docker-build.sh   # Build container
-./scripts/docker-run.sh     # Run with volume mount
-./scripts/docker-rebuild.sh # Stop → Remove → Build → Run
+./scripts/docker-dev.sh     # Build + run with hot-reload (recommended)
+./scripts/docker-build.sh   # Build container only
+./scripts/docker-run.sh     # Run container only
 ```
 
 ## Architecture

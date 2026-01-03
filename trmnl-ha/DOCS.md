@@ -14,6 +14,65 @@ The add-on runs inside your Home Assistant instance as a supervised Docker conta
 
 The add-on persists schedules and configuration in the `/data` directory (mounted by Home Assistant Supervisor).
 
+## Standalone Mode
+
+This add-on can capture screenshots from **any website**, not just Home Assistant. Use it to convert any web content to e-ink optimized images.
+
+### Quick Start (Docker)
+
+```bash
+cd trmnl-ha
+
+# 1. Create configuration
+cp ha-trmnl/options-dev.json.example ha-trmnl/options-dev.json
+```
+
+Edit `options-dev.json`:
+```json
+{
+  "home_assistant_url": "https://your-website.com",
+  "keep_browser_open": true
+}
+```
+
+> **Note:** Despite the name, `home_assistant_url` is just the base URL and works with any website.
+> The `access_token` field is only needed for Home Assistant authentication - omit it for other sites.
+
+```bash
+# 2. Build and run
+./ha-trmnl/scripts/docker-dev.sh
+
+# 3. Capture screenshots
+curl "http://localhost:10000/path/to/page?viewport=800x480"
+curl "http://localhost:10000/?viewport=800x480&dithering&dither_method=floyd-steinberg"
+```
+
+### Quick Start (Bun)
+
+```bash
+cd trmnl-ha/ha-trmnl
+bun install
+
+# Create and edit configuration
+cp options-dev.json.example options-dev.json
+
+# Run
+bun run dev
+```
+
+### Use Cases
+
+- **Monitoring dashboards** - Grafana, Datadog, custom dashboards
+- **Status pages** - Service health, CI/CD pipelines
+- **Information displays** - Weather, calendars, news feeds
+- **Any public webpage** - Convert any URL to e-ink format
+
+### Authentication Notes
+
+- **Public pages**: No configuration needed beyond the URL
+- **Cookie-based auth**: Not currently supported (browser sessions don't persist)
+- **Home Assistant**: Use `access_token` field with a long-lived token
+
 ## Configuration
 
 ### Required Options
@@ -64,20 +123,32 @@ Request any Home Assistant dashboard path with viewport dimensions:
 GET /<dashboard-path>?<parameters>
 ```
 
+Or capture any URL directly using the `url` parameter:
+
+```
+GET /?url=<full-url>&<parameters>
+```
+
 ### Examples
 
 ```bash
-# Basic screenshot
-http://homeassistant.local:10000/lovelace/0?viewport=800x480
+# Basic HA screenshot
+http://localhost:10000/lovelace/0?viewport=800x480
 
 # E-ink optimized (recommended)
-http://homeassistant.local:10000/lovelace/0?viewport=800x480&dithering&dither_method=floyd-steinberg&bit_depth=2
+http://localhost:10000/lovelace/0?viewport=800x480&dithering&dither_method=floyd-steinberg
 
 # With theme
-http://homeassistant.local:10000/lovelace/0?viewport=800x480&theme=Graphite%20E-ink%20Light
+http://localhost:10000/lovelace/0?viewport=800x480&theme=Graphite%20E-ink%20Light
 
 # Dark mode with rotation
-http://homeassistant.local:10000/lovelace/energy?viewport=480x800&rotate=90&dark
+http://localhost:10000/lovelace/energy?viewport=480x800&rotate=90&dark
+
+# Generic URL (any website)
+http://localhost:10000/?url=https://grafana.local/dashboard&viewport=800x480&dithering
+
+# External status page
+http://localhost:10000/?url=https://status.github.com&viewport=800x480
 ```
 
 ### Parameters
@@ -85,16 +156,31 @@ http://homeassistant.local:10000/lovelace/energy?viewport=480x800&rotate=90&dark
 | Parameter | Required | Values | Description |
 |-----------|----------|--------|-------------|
 | `viewport` | Yes | `WxH` | Viewport dimensions (e.g., `800x480`) |
+| `url` | No | URL | Full URL to capture (overrides dashboard path) |
 | `dithering` | No | flag | Enable advanced dithering for e-ink |
 | `dither_method` | No | `floyd-steinberg`, `ordered`, `none` | Dithering algorithm (default: `floyd-steinberg`) |
-| `bit_depth` | No | `1`, `2`, `4`, `8` | Bits per pixel for dithering |
+| `palette` | No | `bw`, `gray-4`, `gray-16`, `gray-256` | Color palette for dithering |
 | `format` | No | `png`, `jpeg`, `bmp` | Output format (default: `png`) |
 | `rotate` | No | `90`, `180`, `270` | Rotation in degrees |
-| `theme` | No | string | Home Assistant theme name |
+| `theme` | No | string | Home Assistant theme name (HA mode only) |
 | `wait` | No | number | Wait time in ms after page load (default: `750`) |
 | `zoom` | No | number | Page zoom level (default: `1.0`) |
-| `lang` | No | string | UI language code (e.g., `nl`) |
-| `dark` | No | flag | Enable dark mode |
+| `lang` | No | string | UI language code (HA mode only) |
+| `dark` | No | flag | Enable dark mode (HA mode only) |
+| `invert` | No | flag | Invert colors (swap black/white) |
+
+### HA Mode vs Generic Mode
+
+The add-on supports two screenshot modes:
+
+| Mode | Path | Auth | Theme/Lang/Dark |
+|------|------|------|-----------------|
+| **HA Mode** | `/lovelace/0?viewport=...` | HA token injected | Supported |
+| **Generic Mode** | `/?url=https://...&viewport=...` | None (public sites only) | Not applicable |
+
+**HA Mode** (default): Uses the configured Home Assistant URL and token to capture authenticated dashboards with theme, language, and dark mode support.
+
+**Generic Mode**: Uses the `url` parameter to capture any public website. No authentication is injected, so it works with any publicly accessible URL.
 
 ## Device Presets
 
@@ -202,42 +288,63 @@ The add-on includes an AppArmor security profile that:
 - [Bun](https://bun.sh) 1.3.5 or later
 - Docker (for container testing)
 
-### Quick Start
+### Configuration
 
 ```bash
 cd trmnl-ha/ha-trmnl
+cp options-dev.json.example options-dev.json
+# Edit options-dev.json with your target URL
+```
+
+### Development Workflow (Hot-Reload)
+
+For active development with automatic restarts on file changes:
+
+```bash
+# Option 1: Docker with hot-reload (recommended)
+./scripts/docker-dev.sh --build    # First time: builds image + starts
+./scripts/docker-dev.sh            # After: just starts (Ctrl+C to stop)
+
+# Option 2: Native Bun (faster, requires local Chrome)
 bun install
 bun run dev
 ```
 
-### Docker Scripts
+- Edit any `.ts` file → server auto-restarts
+- Edit `html/` files → refresh browser to see changes
+- Logs stream directly to terminal
+
+### Production-Like Testing
+
+To test the actual Docker image as it runs in Home Assistant:
 
 ```bash
-./scripts/docker-build.sh    # Build Docker image
-./scripts/docker-run.sh      # Run container with volume mount
-./scripts/docker-health.sh   # Check health status
-./scripts/docker-logs.sh     # View logs
-./scripts/docker-rebuild.sh  # Stop → Remove → Build → Run
-./scripts/docker-stop.sh     # Stop container
+./scripts/docker-build.sh    # Build the production image
+./scripts/docker-run.sh      # Run in background (like HA add-on)
 ```
 
-### Local Configuration
+This builds the full image with files baked in (no hot-reload). Use this to verify changes work in the real container environment before committing.
 
-1. Copy `options-dev.json.sample` to `options-dev.json`
-2. Add your Home Assistant URL and access token
-3. Run `./scripts/docker-run.sh`
+### Docker Scripts
 
-**Data persistence:** Schedules and configuration persist in `/tmp/trmnl-data/` across container rebuilds.
+| Script | Purpose |
+|--------|---------|
+| `docker-dev.sh` | Development with hot-reload (foreground) |
+| `docker-build.sh` | Build production image |
+| `docker-run.sh` | Run production image (background) |
+| `docker-stop.sh` | Stop running container |
+| `docker-health.sh` | Check container health |
+| `docker-logs.sh` | View container logs |
 
-### Development Commands
+### Testing Commands
 
 ```bash
-bun run dev              # Development mode with hot reload
-bun run main.js          # Production mode
 bun test                 # Run all tests
 bun test --coverage      # Tests with coverage
 bun run lint             # ESLint
 ```
+
+**Data persistence:** Schedules and configuration persist in `/tmp/trmnl-data/` across container rebuilds.
 
 ## Health Monitoring
 
