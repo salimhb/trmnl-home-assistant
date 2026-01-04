@@ -207,14 +207,30 @@ export type ScheduleInput = Omit<Schedule, 'id' | 'createdAt' | 'updatedAt'>
 /** Schedule data for updates (all fields optional except id) */
 export type ScheduleUpdate = Partial<Omit<Schedule, 'id'>>
 
+/** Webhook execution result details */
+export interface WebhookResult {
+  /** Whether webhook was attempted */
+  attempted: boolean
+  /** Whether webhook succeeded */
+  success: boolean
+  /** HTTP status code from webhook (if attempted) */
+  statusCode?: number
+  /** Error message (if failed) */
+  error?: string
+  /** Webhook URL that was called */
+  url?: string
+}
+
 /** Response from triggering immediate schedule execution */
 export interface SendScheduleResponse {
-  /** Whether the execution was successful */
+  /** Whether the overall execution was successful (screenshot captured) */
   success: boolean
   /** Path where screenshot was saved (if successful) */
   savedPath?: string
-  /** Error message (if failed) */
+  /** Error message (if screenshot capture failed) */
   error?: string
+  /** Webhook execution details (if webhook was configured) */
+  webhook?: WebhookResult
 }
 
 // =============================================================================

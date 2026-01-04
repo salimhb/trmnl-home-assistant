@@ -28,6 +28,7 @@ import type {
   Schedule,
   CropRegion,
   ScheduleUpdate,
+  SendScheduleResponse,
 } from '../../types/domain.js'
 
 // =============================================================================
@@ -264,29 +265,18 @@ class App {
     const sendCommand = new SendSchedule()
     const result = await sendCommand.call(scheduleId)
 
-    if (result.success) {
-      button.textContent = '✓ Sent!'
-      button.style.backgroundColor = '#10b981'
-      button.style.opacity = '1'
+    // Log detailed result to browser console
+    this.#logSendResult(result)
 
-      await this.#confirmModal.alert({
-        title: '✓ Success!',
-        message: 'Screenshot captured and sent to webhook successfully!',
-        type: 'success',
-      })
-    } else {
-      console.error('Error sending webhook:', result.error)
+    // Determine overall status based on screenshot + webhook results
+    const { title, message, type, buttonText, buttonColor } =
+      this.#buildSendResultFeedback(result)
 
-      button.textContent = '✗ Failed'
-      button.style.backgroundColor = '#ef4444'
-      button.style.opacity = '1'
+    button.textContent = buttonText
+    button.style.backgroundColor = buttonColor
+    button.style.opacity = '1'
 
-      await this.#confirmModal.alert({
-        title: '✗ Error',
-        message: `Failed to send webhook: ${result.error ?? 'Unknown error'}`,
-        type: 'error',
-      })
-    }
+    await this.#confirmModal.alert({ title, message, type })
 
     // Reset button state if it still exists in DOM
     if (document.body.contains(button)) {
@@ -295,6 +285,97 @@ class App {
       button.disabled = false
       button.style.opacity = ''
       button.style.cursor = ''
+    }
+  }
+
+  /** Logs send result to browser console for debugging */
+  #logSendResult(result: SendScheduleResponse): void {
+    const logPrefix = '[Send Now]'
+
+    if (!result.success) {
+      console.error(`${logPrefix} Screenshot capture failed:`, result.error)
+      return
+    }
+
+    console.log(`${logPrefix} Screenshot saved: ${result.savedPath}`)
+
+    if (!result.webhook) {
+      console.log(`${logPrefix} No webhook configured`)
+      return
+    }
+
+    const { webhook } = result
+    if (webhook.success) {
+      console.log(
+        `${logPrefix} Webhook success: ${webhook.statusCode} → ${webhook.url}`
+      )
+    } else {
+      console.error(
+        `${logPrefix} Webhook failed: ${webhook.error} → ${webhook.url}`
+      )
+    }
+  }
+
+  /** Builds user-facing feedback based on send result */
+  #buildSendResultFeedback(result: SendScheduleResponse): {
+    title: string
+    message: string
+    type: 'success' | 'error' | 'warning'
+    buttonText: string
+    buttonColor: string
+  } {
+    // Screenshot capture failed
+    if (!result.success) {
+      return {
+        title: 'Screenshot Failed',
+        message: `Failed to capture screenshot: ${
+          result.error ?? 'Unknown error'
+        }`,
+        type: 'error',
+        buttonText: 'Failed',
+        buttonColor: '#ef4444',
+      }
+    }
+
+    // No webhook configured - just screenshot saved
+    if (!result.webhook) {
+      return {
+        title: 'Screenshot Saved',
+        message: `Screenshot captured and saved to:\n${result.savedPath}`,
+        type: 'success',
+        buttonText: 'Saved',
+        buttonColor: '#10b981',
+      }
+    }
+
+    // Webhook was attempted
+    const { webhook } = result
+
+    if (webhook.success) {
+      return {
+        title: 'Success',
+        message:
+          `Screenshot captured and sent to webhook.\n\n` +
+          `Saved: ${result.savedPath}\n` +
+          `Webhook: ${webhook.statusCode} OK\n` +
+          `URL: ${webhook.url ?? 'N/A'}`,
+        type: 'success',
+        buttonText: 'Sent',
+        buttonColor: '#10b981',
+      }
+    }
+
+    // Webhook failed but screenshot was saved
+    return {
+      title: 'Partial Success',
+      message:
+        `Screenshot saved, but webhook delivery failed.\n\n` +
+        `Saved: ${result.savedPath}\n` +
+        `Error: ${webhook.error}\n` +
+        `URL: ${webhook.url ?? 'N/A'}`,
+      type: 'warning',
+      buttonText: 'Partial',
+      buttonColor: '#f59e0b',
     }
   }
 

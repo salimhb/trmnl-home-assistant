@@ -23,7 +23,11 @@ import {
 } from './scheduleStore.js'
 import { loadPresets } from '../devices.js'
 import type { BrowserFacade } from './browserFacade.js'
-import type { ScheduleInput, ScheduleUpdate } from '../types/domain.js'
+import type {
+  ScheduleInput,
+  ScheduleUpdate,
+  WebhookResult,
+} from '../types/domain.js'
 import { toJson } from './json.js'
 import { httpLogger } from './logger.js'
 
@@ -50,7 +54,7 @@ const MIME_TYPES: Record<string, string> = {
 interface Scheduler {
   executeNow(
     scheduleId: string
-  ): Promise<{ success: boolean; savedPath: string }>
+  ): Promise<{ success: boolean; savedPath: string; webhook?: WebhookResult }>
 }
 
 /**
