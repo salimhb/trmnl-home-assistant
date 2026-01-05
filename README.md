@@ -2,11 +2,13 @@
 
 # TRMNL HA
 
-![TRMNL Logo](trmnl-ha/logo.png)
+![TRMNL Logo](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/logo.png?raw=true)
 
 Send Home Assistant dashboard screenshots to your TRMNL e-ink display with advanced dithering optimized for e-paper screens.
 
 [![Add repository to Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fusetrmnl%2Ftrmnl-home-assistant)
+
+**Note:** This add-on can capture screenshots from **any website**, not just Home Assistant dashboards. See [Standalone Mode](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/DOCS.md#standalone-mode) for detailed setup.
 
 ## Features
 
@@ -48,30 +50,30 @@ If running Home Assistant OS in Proxmox, set the VM host type to `host` for Chro
 
 | Topic | Description |
 |-------|-------------|
-| [Configuration](trmnl-ha/DOCS.md#configuration) | Required and optional settings |
-| [Web UI](trmnl-ha/DOCS.md#web-ui) | Using the web interface |
-| [API Reference](trmnl-ha/DOCS.md#api-reference) | Screenshot endpoint parameters |
-| [Device Presets](trmnl-ha/DOCS.md#device-presets) | Supported e-ink displays |
-| [Scheduled Captures](trmnl-ha/DOCS.md#scheduled-captures) | Cron-based automation |
-| [Troubleshooting](trmnl-ha/DOCS.md#troubleshooting) | Common issues and fixes |
-| [Local Development](trmnl-ha/DOCS.md#local-development) | Development setup |
+| [Configuration](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/DOCS.md#configuration) | Required and optional settings |
+| [Web UI](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/DOCS.md#web-ui) | Using the web interface |
+| [API Reference](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/DOCS.md#api-reference) | Screenshot endpoint parameters |
+| [Device Presets](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/DOCS.md#device-presets) | Supported e-ink displays |
+| [Scheduled Captures](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/DOCS.md#scheduled-captures) | Cron-based automation |
+| [Troubleshooting](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/DOCS.md#troubleshooting) | Common issues and fixes |
+| [Local Development](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/DOCS.md#local-development) | Development setup |
 
 ## Attribution
 
 This project is based on the [puppet](https://github.com/balloob/home-assistant-addons/tree/main/puppet) Home Assistant add-on by [Paulus Schoutsen](https://github.com/balloob).
 
-See the [NOTICE](trmnl-ha/NOTICE) file for complete attribution and modification details.
+See the [NOTICE](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/NOTICE) file for complete attribution and modification details.
 
 ## License
 
 Copyright (c) Paulus Schoutsen (original work)
 Copyright (c) 2024-2025 TRMNL (enhancements and modifications)
 
-Licensed under the [Apache License 2.0](trmnl-ha/LICENSE)
+Licensed under the [Apache License 2.0](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/LICENSE)
 
 ## Links
 
 - [TRMNL](https://usetrmnl.com)
-- [Documentation](trmnl-ha/DOCS.md)
-- [Changelog](trmnl-ha/CHANGELOG.md)
+- [Documentation](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/DOCS.md)
+- [Changelog](https://github.com/usetrmnl/trmnl-home-assistant/blob/main/trmnl-ha/CHANGELOG.md)
 - [Upstream Project (puppet)](https://github.com/balloob/home-assistant-addons)

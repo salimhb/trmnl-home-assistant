@@ -494,7 +494,7 @@ export class RenderScheduleContent {
           <select id="s_theme"
             class="w-full px-3 py-2 border rounded-md" style="border-color: var(--primary-light)"
             onchange="window.app.updateScheduleFromForm()"
-            title="Home Assistant theme to apply">
+            title="Home Assistant theme (Graphite recommended for e-ink)">
             <option value="">Default</option>
           </select>
         </div>
@@ -507,7 +507,7 @@ export class RenderScheduleContent {
             title="Language code for Home Assistant UI" />
         </div>
       </div>
-      <p class="text-xs text-gray-500 mt-1">Theme: Use HA custom themes | Language: Override HA language (e.g., "en", "fr", "de")</p>
+      <p class="text-xs text-gray-500 mt-1">Theme: <a href="https://github.com/TilmanGriesel/graphite" target="_blank" class="underline" style="color: var(--primary)">Graphite</a> recommended for e-ink | Language: Override HA language (e.g., "en", "fr")</p>
     `
   }
 
