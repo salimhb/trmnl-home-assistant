@@ -4,7 +4,16 @@
 # Uses Debian Bookworm for updated packages and better security
 
 # =============================================================================
-# STAGE 1: DEPENDENCY BUILDER
+# STAGE 1: IMAGEMAGICK 7 SOURCE
+# =============================================================================
+# NOTE: Using dpokidov's IM7 image to ensure consistent dithering between
+# local dev (IM7) and Docker. Debian apt only provides IM6 which has different
+# algorithm implementations, colorspace handling, and HDRI support.
+# See: https://github.com/dooman87/imagemagick-docker
+FROM dpokidov/imagemagick:7.1.1-47-bookworm AS imagemagick
+
+# =============================================================================
+# STAGE 2: DEPENDENCY BUILDER
 # =============================================================================
 # NOTE: Using official Bun image which ships with baseline x64 builds for maximum
 # CPU compatibility (supports Synology DS918+, older Proxmox VMs, CPUs without AVX2)
@@ -25,14 +34,14 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
     bun install --frozen-lockfile --production
 
 # =============================================================================
-# STAGE 2: RUNTIME
+# STAGE 3: RUNTIME
 # =============================================================================
 FROM debian:bookworm-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
 
-# Install only runtime dependencies
+# Install only runtime dependencies (ImageMagick copied from stage 1)
 # NOTE: Grouped by purpose for clarity and maintainability
 # NOTE: Using BuildKit cache mounts for apt to speed up rebuilds
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -46,8 +55,41 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     ca-certificates \
     # CJK font support for international dashboards
     fonts-noto-cjk \
-    # Image processing for dithering algorithms
-    imagemagick
+    # ImageMagick 7 runtime dependencies (binaries copied from stage 1)
+    libgomp1 \
+    libomp5 \
+    libjpeg62-turbo \
+    libpng16-16 \
+    libtiff6 \
+    libwebp7 \
+    libwebpmux3 \
+    libwebpdemux2 \
+    libheif1 \
+    libraw20 \
+    liblcms2-2 \
+    libfreetype6 \
+    libfontconfig1 \
+    libfftw3-double3 \
+    liblqr-1-0 \
+    libltdl7 \
+    libopenjp2-7 \
+    libxml2 \
+    libzip4
+
+# Copy ImageMagick 7 binaries and libraries from stage 1
+# NOTE: This gives us IM7 with Q16-HDRI for consistent dithering with local dev
+COPY --from=imagemagick /usr/local/bin/magick /usr/local/bin/
+COPY --from=imagemagick /usr/local/lib/ /usr/local/lib/
+COPY --from=imagemagick /usr/local/etc/ImageMagick-7/ /usr/local/etc/ImageMagick-7/
+
+# Set up ImageMagick 7 CLI compatibility
+# The gm package calls 'convert', but IM7 uses 'magick' and shows deprecation warnings
+# We use a wrapper script that filters out the warning while preserving functionality
+COPY ha-trmnl/scripts/imagemagick-wrapper.sh /usr/local/bin/convert
+RUN chmod +x /usr/local/bin/convert && \
+    ln -s /usr/local/bin/magick /usr/local/bin/identify && \
+    ln -s /usr/local/bin/magick /usr/local/bin/mogrify && \
+    ldconfig
 
 # Copy Bun runtime from builder stage
 # NOTE: /usr/local/bin is already in PATH, no additional ENV needed

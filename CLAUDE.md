@@ -8,7 +8,7 @@ Home Assistant add-on for TRMNL e-ink displays. Captures HA dashboard screenshot
 
 **Runtime:** Bun 1.3.5+ (not Node.js)
 **Language:** TypeScript with strict type checking
-**Image Processing:** ImageMagick via `gm` package
+**Image Processing:** ImageMagick 7 Q16-HDRI via `gm` package
 
 ## Development Commands
 
@@ -121,11 +121,37 @@ Error hierarchy:
 
 ## Local Development Setup
 
+### Recommended: Docker Dev (ensures ImageMagick version parity)
+
+```bash
+cd trmnl-ha/ha-trmnl
+cp options-dev.json.example options-dev.json
+# Edit options-dev.json with your HA URL and token
+./scripts/docker-dev.sh
+```
+
+This runs the app inside Docker with hot-reload, using the **exact same ImageMagick 7 Q16-HDRI** version as production. This ensures dithering output is identical between dev and prod.
+
+### Alternative: Native Bun (requires local ImageMagick 7)
+
+If you prefer running outside Docker, you need ImageMagick 7 installed locally:
+
+```bash
+# macOS
+brew install imagemagick
+
+# Verify version (must be 7.x with Q16-HDRI)
+convert -version | head -1
+# Should show: Version: ImageMagick 7.x.x Q16-HDRI
+```
+
+Then:
 1. Copy `options-dev.json.example` to `options-dev.json`
 2. Add your HA URL and access token
 3. Run `bun run dev`
 
-For development without real Home Assistant:
+### Mock HA Server (for development without real HA)
+
 ```bash
 # Terminal 1: Mock HA server
 bun run mock:server
@@ -180,5 +206,5 @@ log.error`Failed: ${error.message}`
 
 - Base: `debian:bookworm-slim` (multi-stage build)
 - Chromium for headless browser
-- ImageMagick for image processing
+- ImageMagick 7 Q16-HDRI (copied from `dpokidov/imagemagick` for consistent dithering)
 - Health check: `GET /health` on port 10000
