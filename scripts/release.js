@@ -230,6 +230,15 @@ function updateChangelog(newVersion, previousVersion, entries) {
 }
 
 /**
+ * Get current git branch name
+ */
+function getCurrentBranch() {
+  return execSync('git rev-parse --abbrev-ref HEAD', {
+    encoding: 'utf8',
+  }).trim()
+}
+
+/**
  * Create git commit and tag
  */
 function gitCommitAndTag(version, dryRun = false) {
@@ -308,6 +317,25 @@ function release(bumpType, options = {}) {
     gitCommitAndTag(newVersion, true)
     console.log(`\n💡 To execute, run: bun scripts/release.js ${bumpType}`)
     return
+  }
+
+  // Validate we're on main branch (only for actual releases, not dry-run)
+  const currentBranch = getCurrentBranch()
+  if (currentBranch !== 'main') {
+    console.error(`
+❌ Releases must be created from the main branch.
+
+   Current branch: ${currentBranch}
+
+   To release:
+   1. Merge your feature branch to main first
+   2. git checkout main
+   3. git pull origin main
+   4. bun scripts/release.js ${bumpType}
+
+   💡 Use --dry-run to preview changes from any branch
+`)
+    process.exit(1)
   }
 
   // Check for uncommitted changes
