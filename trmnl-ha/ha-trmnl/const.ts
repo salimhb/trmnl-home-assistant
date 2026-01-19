@@ -178,12 +178,15 @@ if (useMockHA) {
 /**
  * Home Assistant base URL
  * Automatically switches to mock server when MOCK_HA=true
+ * NOTE: Trailing slashes are stripped to prevent double-slash issues in URL paths
  */
-export const hassUrl: string = useMockHA
+const rawHassUrl: string = useMockHA
   ? 'http://localhost:8123' // Mock HA server
   : isAddOn
   ? options.home_assistant_url || 'http://homeassistant:8123'
   : options.home_assistant_url || 'http://localhost:8123'
+
+export const hassUrl: string = rawHassUrl.replace(/\/+$/, '')
 
 // Apply Bun TLS workaround for HTTPS URLs
 // See comment at top of file for details
