@@ -3,6 +3,19 @@
  * @module const
  */
 
+// =============================================================================
+// BUN TLS WORKAROUND
+// =============================================================================
+// NOTE: Bun has a known issue where rejectUnauthorized: false doesn't work
+// for WebSocket connections. Setting NODE_TLS_REJECT_UNAUTHORIZED=0 is the
+// only reliable workaround. This enables HTTPS connections with self-signed
+// certs or internal domains.
+// See: https://github.com/oven-sh/bun/issues/11821
+//
+// This is set automatically when the HA URL uses HTTPS. Users running with
+// valid certificates can override this by setting NODE_TLS_REJECT_UNAUTHORIZED=1
+// =============================================================================
+
 import { readFileSync, existsSync } from 'fs'
 import type {
   ImageFormat,
@@ -171,6 +184,16 @@ export const hassUrl: string = useMockHA
   : isAddOn
   ? options.home_assistant_url || 'http://homeassistant:8123'
   : options.home_assistant_url || 'http://localhost:8123'
+
+// Apply Bun TLS workaround for HTTPS URLs
+// See comment at top of file for details
+if (
+  hassUrl.startsWith('https://') &&
+  process.env['NODE_TLS_REJECT_UNAUTHORIZED'] === undefined
+) {
+  process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '0'
+  console.log('[Config] HTTPS detected - enabling TLS bypass for flexibility')
+}
 
 /**
  * Long-lived access token for Home Assistant authentication

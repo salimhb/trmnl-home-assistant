@@ -94,6 +94,8 @@ docker run -it --rm \
   -v "${APP_DIR}/error.ts:/app/error.ts" \
   -v "${APP_DIR}/screenshot.ts:/app/screenshot.ts" \
   -v "${APP_DIR}/scheduler.ts:/app/scheduler.ts" \
+  -v "${APP_DIR}/ui.ts:/app/ui.ts" \
+  -v "${APP_DIR}/devices.ts:/app/devices.ts" \
   -v "${APP_DIR}/types:/app/types" \
   "${IMAGE_NAME}" \
   bun --watch run main.ts

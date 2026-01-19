@@ -9,11 +9,23 @@ import type { ServerResponse } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { lookup } from 'node:dns/promises'
 import {
   createConnection,
   createLongLivedTokenAuth,
+  ERR_CANNOT_CONNECT,
+  ERR_INVALID_AUTH,
 } from 'home-assistant-js-websocket'
-import type { HassConfig, Connection } from 'home-assistant-js-websocket'
+import type {
+  HassConfig,
+  Connection,
+  Auth,
+  ConnectionOptions,
+} from 'home-assistant-js-websocket'
+import type { HaWebSocket as LibHaWebSocket } from 'home-assistant-js-websocket/dist/socket.js'
+import * as messages from 'home-assistant-js-websocket/dist/messages.js'
+import { atLeastHaVersion } from 'home-assistant-js-websocket/dist/util.js'
+import WebSocket from 'ws'
 import { hassUrl, hassToken } from './const.js'
 import { loadPresets } from './devices.js'
 import type { PresetsConfig } from './types/domain.js'
@@ -87,6 +99,195 @@ let cachedHassData: HomeAssistantData | null = null
 let cacheTimestamp: number = 0
 
 // =============================================================================
+// CUSTOM WEBSOCKET WITH SSL BYPASS
+// =============================================================================
+
+/**
+ * WebSocket interface extended with Home Assistant version
+ * NOTE: We use a local interface because ws.WebSocket has different methods
+ * than the browser's WebSocket that home-assistant-js-websocket expects.
+ * We cast to the library's HaWebSocket type at the end.
+ */
+interface HaWebSocket extends WebSocket {
+  haVersion: string
+}
+
+const MSG_TYPE_AUTH_REQUIRED = 'auth_required'
+const MSG_TYPE_AUTH_INVALID = 'auth_invalid'
+const MSG_TYPE_AUTH_OK = 'auth_ok'
+
+/**
+ * Extracts hostname from a URL for DNS diagnostics
+ */
+function extractHostname(url: string): string | null {
+  try {
+    return new URL(url).hostname
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Checks if hostname can be resolved via DNS
+ * Returns detailed diagnostic info for error logging
+ */
+async function checkDnsResolution(
+  hostname: string
+): Promise<{ resolved: boolean; ip?: string; error?: string }> {
+  try {
+    const result = await lookup(hostname)
+    return { resolved: true, ip: result.address }
+  } catch (err) {
+    const error = err as NodeJS.ErrnoException
+    return {
+      resolved: false,
+      error: `${error.code || 'UNKNOWN'}: ${error.message}`,
+    }
+  }
+}
+
+/**
+ * Creates a WebSocket connection with SSL certificate validation bypassed.
+ * This is necessary for:
+ * - Self-signed certificates
+ * - Internal domains that may not have proper certificate chains
+ * - Docker containers that may not have all CA certificates
+ *
+ * NOTE: The auth flow is adapted from home-assistant-js-websocket's socket.js
+ * NOTE: We cast to LibHaWebSocket because ws.WebSocket has different methods
+ * than the browser's WebSocket, but they're compatible enough for our use case.
+ */
+function createSocketWithSslBypass(
+  options: ConnectionOptions
+): Promise<LibHaWebSocket> {
+  const auth = options.auth as Auth
+  if (!auth) {
+    throw new Error('Auth is required for WebSocket connection')
+  }
+
+  const wsUrl = auth.wsUrl
+  const isSecure = wsUrl.startsWith('wss://')
+
+  log.debug`Creating WebSocket connection to ${wsUrl}`
+  log.debug`SSL bypass enabled: ${isSecure}`
+
+  return new Promise((resolve, reject) => {
+    function connect(
+      triesLeft: number,
+      promResolve: (socket: LibHaWebSocket) => void,
+      promReject: (err: unknown) => void
+    ) {
+      log.debug`WebSocket connection attempt (retries left: ${triesLeft})`
+
+      // NOTE: rejectUnauthorized: false bypasses SSL certificate validation
+      // This allows connections to:
+      // - Self-signed certs
+      // - Internal domains with custom CAs
+      // - Let's Encrypt certs when CA store is incomplete
+      const socket = new WebSocket(wsUrl, {
+        rejectUnauthorized: false,
+      }) as HaWebSocket
+
+      let invalidAuth = false
+
+      const closeMessage = (
+        event?: WebSocket.CloseEvent | WebSocket.ErrorEvent
+      ) => {
+        socket.removeEventListener('close', closeMessage)
+
+        // Log detailed error info for diagnostics
+        if (event && 'message' in event && event.message) {
+          log.error`WebSocket error: ${event.message}`
+        }
+        if (event && 'code' in event) {
+          log.debug`WebSocket close code: ${
+            (event as WebSocket.CloseEvent).code
+          }`
+        }
+
+        if (invalidAuth) {
+          log.error`Authentication failed - invalid token`
+          promReject(ERR_INVALID_AUTH)
+          return
+        }
+
+        if (triesLeft === 0) {
+          log.error`WebSocket connection failed after all retries`
+          promReject(ERR_CANNOT_CONNECT)
+          return
+        }
+
+        const newTries = triesLeft === -1 ? -1 : triesLeft - 1
+        log.debug`Retrying WebSocket connection in 1s...`
+        setTimeout(() => connect(newTries, promResolve, promReject), 1000)
+      }
+
+      const handleOpen = async () => {
+        log.debug`WebSocket connection opened, sending auth...`
+        try {
+          if (auth.expired) {
+            await auth.refreshAccessToken()
+          }
+          socket.send(JSON.stringify(messages.auth(auth.accessToken)))
+        } catch (err) {
+          log.error`Auth token refresh failed: ${(err as Error).message}`
+          invalidAuth = err === ERR_INVALID_AUTH
+          socket.close()
+        }
+      }
+
+      const handleMessage = async (event: WebSocket.MessageEvent) => {
+        const message = JSON.parse(event.data.toString())
+        log.debug`WebSocket message received: ${message.type}`
+
+        switch (message.type) {
+          case MSG_TYPE_AUTH_INVALID:
+            log.error`Home Assistant rejected auth token`
+            invalidAuth = true
+            socket.close()
+            break
+
+          case MSG_TYPE_AUTH_OK:
+            socket.removeEventListener('open', handleOpen)
+            socket.removeEventListener('message', handleMessage)
+            socket.removeEventListener('close', closeMessage)
+            socket.removeEventListener('error', closeMessage)
+            socket.haVersion = message.ha_version
+            log.info`Connected to Home Assistant ${message.ha_version}`
+
+            if (atLeastHaVersion(socket.haVersion, 2022, 9)) {
+              socket.send(JSON.stringify(messages.supportedFeatures()))
+            }
+            // NOTE: Cast to LibHaWebSocket - ws.WebSocket is compatible enough
+            // for home-assistant-js-websocket's needs (send, close, events)
+            promResolve(socket as unknown as LibHaWebSocket)
+            break
+
+          case MSG_TYPE_AUTH_REQUIRED:
+            log.debug`Auth required message received (expected)`
+            break
+
+          default:
+            log.debug`Unhandled WebSocket message type: ${message.type}`
+        }
+      }
+
+      const handleError = (event: WebSocket.ErrorEvent) => {
+        log.error`WebSocket error event: ${event.message || 'Unknown error'}`
+        closeMessage(event)
+      }
+
+      socket.addEventListener('open', handleOpen)
+      socket.addEventListener('message', handleMessage)
+      socket.addEventListener('close', closeMessage)
+      socket.addEventListener('error', handleError)
+    }
+
+    connect(options.setupRetry ?? 0, resolve, reject)
+  })
+}
+
+// =============================================================================
 // HELPER FUNCTIONS
 // =============================================================================
 
@@ -129,21 +330,70 @@ function withTimeout<T>(
 }
 
 /**
- * Fetches configuration data from Home Assistant via WebSocket and REST API
+ * Logs detailed diagnostic information when connection fails
+ */
+async function logConnectionDiagnostics(url: string, err: unknown) {
+  const error = err as Error & { code?: string; cause?: unknown }
+
+  log.error`HA connection failed: ${error.message || String(err)}`
+
+  // Log error details
+  if (error.code) {
+    log.error`Error code: ${error.code}`
+  }
+  if (error.cause) {
+    log.error`Error cause: ${JSON.stringify(error.cause)}`
+  }
+
+  // Check DNS resolution
+  const hostname = extractHostname(url)
+  if (hostname) {
+    const dnsResult = await checkDnsResolution(hostname)
+    if (dnsResult.resolved) {
+      log.info`DNS resolution OK: ${hostname} -> ${dnsResult.ip}`
+    } else {
+      log.error`DNS resolution FAILED for ${hostname}: ${dnsResult.error}`
+      log.error`Hint: The hostname may not be resolvable from inside the Docker container.`
+      log.error`Try using an IP address instead, or configure Docker DNS settings.`
+    }
+  }
+
+  // Protocol-specific hints
+  if (url.startsWith('https://')) {
+    log.info`Using HTTPS - SSL certificate validation is bypassed for flexibility.`
+    log.info`If connection still fails, check if the HA server is reachable from this container.`
+  }
+}
+
+/**
+ * Fetches configuration data from Home Assistant via WebSocket and REST API.
+ * Uses custom WebSocket creation with SSL certificate validation bypassed
+ * to support self-signed certs and internal domains.
  */
 async function fetchHomeAssistantData(): Promise<HomeAssistantData> {
   try {
-    log.debug`Connecting to HA at: ${hassUrl}`
+    log.info`Connecting to HA at: ${hassUrl}`
     log.debug`Token configured: ${
       hassToken ? 'yes (' + hassToken.substring(0, 10) + '...)' : 'NO'
     }`
+    log.debug`Protocol: ${
+      hassUrl.startsWith('https://') ? 'HTTPS (SSL bypass enabled)' : 'HTTP'
+    }`
 
     const auth = createLongLivedTokenAuth(hassUrl, hassToken!)
+
+    // NOTE: Using custom createSocket to bypass SSL certificate validation
+    // This is necessary for self-signed certs and internal domains
     const connection: Connection = await withTimeout(
-      createConnection({ auth }),
+      createConnection({
+        auth,
+        createSocket: createSocketWithSslBypass,
+      }),
       HA_CONNECTION_TIMEOUT,
       `HA connection timeout after ${HA_CONNECTION_TIMEOUT}ms`
     )
+
+    log.debug`WebSocket connected, fetching HA data...`
 
     const [themesResult, networkResult, dashboardsResult] = await Promise.all([
       connection.sendMessagePromise<ThemesResult>({
@@ -158,6 +408,7 @@ async function fetchHomeAssistantData(): Promise<HomeAssistantData> {
     ])
 
     connection.close()
+    log.debug`WebSocket closed, fetching REST API config...`
 
     const configResponse = await fetch(`${hassUrl}/api/config`, {
       headers: {
@@ -169,6 +420,10 @@ async function fetchHomeAssistantData(): Promise<HomeAssistantData> {
     const config: HassConfig | null = configResponse.ok
       ? ((await configResponse.json()) as HassConfig)
       : null
+
+    if (!configResponse.ok) {
+      log.warn`REST API /api/config failed: ${configResponse.status} ${configResponse.statusText}`
+    }
 
     let dashboards = [
       '/lovelace/0',
@@ -198,12 +453,10 @@ async function fetchHomeAssistantData(): Promise<HomeAssistantData> {
       }`
     }
 
+    log.info`Successfully fetched HA data (${dashboards.length} dashboards)`
     return { themes: themesResult, network: networkResult, config, dashboards }
   } catch (err) {
-    log.error`Error fetching HA data: ${(err as Error).message || err}`
-    const error = err as Error & { code?: string; cause?: unknown }
-    if (error.code) log.debug`Error code: ${error.code}`
-    if (error.cause) log.debug`Error cause: ${error.cause}`
+    await logConnectionDiagnostics(hassUrl, err)
     return { themes: null, network: null, config: null, dashboards: null }
   }
 }
@@ -218,7 +471,9 @@ async function getCachedOrFetch(forceRefresh: boolean): Promise<{
 }> {
   // Return cached data if available and not forcing refresh
   if (cachedHassData && !forceRefresh) {
-    log.debug`Using cached HA data (age: ${Math.round((Date.now() - cacheTimestamp) / 1000)}s)`
+    log.debug`Using cached HA data (age: ${Math.round(
+      (Date.now() - cacheTimestamp) / 1000
+    )}s)`
     return { data: cachedHassData, cachedAt: cacheTimestamp }
   }
 
@@ -271,9 +526,7 @@ export async function handleUIRequest(
     const haConnected = !!(hassData.themes && hassData.config)
 
     // Build token preview (first 4 chars masked)
-    const tokenPreview = hassToken
-      ? `${hassToken.slice(0, 4)}****`
-      : null
+    const tokenPreview = hassToken ? `${hassToken.slice(0, 4)}****` : null
 
     // Determine connection status reason
     let connectionStatus: string
@@ -293,7 +546,9 @@ export async function handleUIRequest(
     if (haConnected) {
       log.info`HA connection: ${connectionStatus} | URL: ${hassUrl} | Token: ${tokenPreview}`
     } else {
-      log.warning`HA connection: ${connectionStatus} | URL: ${hassUrl} | Token: ${tokenPreview ?? 'not set'}`
+      log.warning`HA connection: ${connectionStatus} | URL: ${hassUrl} | Token: ${
+        tokenPreview ?? 'not set'
+      }`
     }
 
     // Build UI config for frontend

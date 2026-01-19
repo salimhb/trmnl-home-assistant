@@ -248,10 +248,15 @@ export class Browser {
 
     try {
       // Launch browser
+      // NOTE: acceptInsecureCerts allows screenshots of HTTPS pages with:
+      // - Self-signed certificates
+      // - Internal domains with custom CAs
+      // - Let's Encrypt certs when CA store is incomplete in Docker
       const browser = await puppeteer.launch({
         headless: 'shell',
         executablePath: chromiumExecutable,
         args: PUPPETEER_ARGS,
+        acceptInsecureCerts: true,
       })
 
       // Monitor browser process death
