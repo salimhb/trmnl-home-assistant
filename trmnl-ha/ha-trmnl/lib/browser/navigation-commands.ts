@@ -41,7 +41,9 @@ export class NavigateToPage {
   constructor(page: Page, authStorage: AuthStorage, homeAssistantUrl: string) {
     this.#page = page
     this.#authStorage = authStorage
-    this.#homeAssistantUrl = homeAssistantUrl
+    // NOTE: Normalize URL to strip default ports (80/http, 443/https)
+    // so startsWith checks match URLs resolved by the URL class
+    this.#homeAssistantUrl = new URL(homeAssistantUrl).origin
   }
 
   /**
@@ -56,7 +58,7 @@ export class NavigateToPage {
   async call(
     pagePath: string,
     isFirstNavigation: boolean = false,
-    targetUrl?: string
+    targetUrl?: string,
   ): Promise<NavigationResult> {
     if (isFirstNavigation) {
       return this.#firstNavigation(pagePath, targetUrl)
@@ -75,7 +77,7 @@ export class NavigateToPage {
 
   async #firstNavigation(
     pagePath: string,
-    targetUrl?: string
+    targetUrl?: string,
   ): Promise<NavigationResult> {
     // Resolve the final URL: use targetUrl if provided, otherwise resolve against HA base
     const pageUrl =
@@ -94,7 +96,7 @@ export class NavigateToPage {
             localStorage.setItem(key, value)
           }
         },
-        this.#authStorage
+        this.#authStorage,
       )
     }
 
@@ -126,7 +128,7 @@ export class NavigateToPage {
 
   async #subsequentNavigation(
     pagePath: string,
-    targetUrl?: string
+    targetUrl?: string,
   ): Promise<NavigationResult> {
     const isGenericUrl = !!targetUrl
     const isCurrentlyOnHA = this.#page.url().startsWith(this.#homeAssistantUrl)
@@ -205,7 +207,7 @@ export class WaitForPageLoad {
 
           return !('_loading' in panel) || !panel._loading
         },
-        { timeout: 3000, polling: 100 }
+        { timeout: 3000, polling: 100 },
       )
     } catch (_err) {
       log.debug`Timeout waiting for HA to finish loading`
@@ -333,7 +335,8 @@ export class WaitForNetworkIdle {
       // Wait for network to be idle
       while (Date.now() - start < this.#timeout) {
         const timeSinceLastActivity = Date.now() - lastActivityTime
-        const isIdle = pendingRequests === 0 && timeSinceLastActivity >= this.#idleTime
+        const isIdle =
+          pendingRequests === 0 && timeSinceLastActivity >= this.#idleTime
 
         if (isIdle) {
           const actualWait = Date.now() - start
@@ -408,7 +411,11 @@ export class WaitForLoadingComplete {
           const elementsWithShadow = Array.from(root.querySelectorAll('*'))
           for (const el of elementsWithShadow) {
             if ((el as Element & { shadowRoot?: ShadowRoot }).shadowRoot) {
-              if (checkShadowRoot((el as Element & { shadowRoot: ShadowRoot }).shadowRoot)) {
+              if (
+                checkShadowRoot(
+                  (el as Element & { shadowRoot: ShadowRoot }).shadowRoot,
+                )
+              ) {
                 return true
               }
             }
@@ -458,12 +465,12 @@ export class DismissToastsAndSetZoom {
       if (!haEl) return false
 
       const notifyEl = haEl.shadowRoot?.querySelector(
-        'notification-manager'
+        'notification-manager',
       ) as (Element & { shadowRoot: ShadowRoot | null }) | null
       if (!notifyEl) return false
 
       const actionEl = notifyEl.shadowRoot?.querySelector(
-        'ha-toast *[slot=action]'
+        'ha-toast *[slot=action]',
       ) as HTMLElement | null
       if (!actionEl) return false
 
@@ -497,6 +504,14 @@ export class UpdateLanguage {
 
 /**
  * Updates Home Assistant theme and dark mode settings.
+ *
+ * NOTE: Since HA 2026.2 (frontend PR #28965), dispatching the 'settheme'
+ * event persists the theme to the user's backend profile via WebSocket,
+ * changing the theme globally for all sessions. We temporarily intercept
+ * the persistence call so the change is visual-only for screenshots.
+ *
+ * @see https://github.com/usetrmnl/trmnl-home-assistant/issues/31
+ * @see https://github.com/home-assistant/frontend/pull/28965
  */
 export class UpdateTheme {
   #page: Page
@@ -508,14 +523,66 @@ export class UpdateTheme {
   async call(theme: string, dark: boolean): Promise<void> {
     await this.#page.evaluate(
       ({ theme, dark }: { theme: string; dark: boolean }) => {
-        const haEl = document.querySelector('home-assistant')
-        haEl?.dispatchEvent(
+        interface WsMsg { type: string; [k: string]: unknown }
+        type SendFn = (msg: WsMsg) => void
+        type SendPromiseFn = (msg: WsMsg) => Promise<unknown>
+        interface HAConn {
+          sendMessage?: SendFn
+          sendMessagePromise?: SendPromiseFn
+          [k: string]: unknown
+        }
+
+        const haEl = document.querySelector('home-assistant') as
+          | (Element & { hass?: { connection?: HAConn } })
+          | null
+        if (!haEl) return
+
+        const conn = haEl.hass?.connection
+
+        // Temporarily block theme persistence to user profile.
+        // HA 2026.2+ persists theme via saveThemePreferences() which calls:
+        //   conn.sendMessagePromise({ type: "frontend/set_user_data", key: "theme", value })
+        // We intercept this specific call so the visual change happens
+        // but nothing is saved to the backend.
+        const isThemeSave = (msg: WsMsg) =>
+          msg.type === 'frontend/set_user_data' && msg['key'] === 'theme'
+
+        let origSendMessage: SendFn | undefined
+        let origSendMessagePromise: SendPromiseFn | undefined
+
+        if (conn?.sendMessage) {
+          origSendMessage = conn.sendMessage.bind(conn)
+          conn.sendMessage = (msg: WsMsg) => {
+            if (isThemeSave(msg)) return
+            origSendMessage!(msg)
+          }
+        }
+
+        if (conn?.sendMessagePromise) {
+          origSendMessagePromise = conn.sendMessagePromise.bind(conn)
+          conn.sendMessagePromise = (msg: WsMsg) => {
+            if (isThemeSave(msg)) return Promise.resolve(null)
+            return origSendMessagePromise!(msg)
+          }
+        }
+
+        // Dispatch theme change — HA applies it visually via LitElement reactivity
+        haEl.dispatchEvent(
           new CustomEvent('settheme', {
             detail: { theme, dark },
-          })
+          }),
         )
+
+        // Restore original methods after HA processes the event
+        if (conn) {
+          setTimeout(() => {
+            if (origSendMessage) conn.sendMessage = origSendMessage
+            if (origSendMessagePromise)
+              conn.sendMessagePromise = origSendMessagePromise
+          }, 2000)
+        }
       },
-      { theme: theme || '', dark }
+      { theme: theme || '', dark },
     )
   }
 }

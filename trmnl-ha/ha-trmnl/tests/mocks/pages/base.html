@@ -107,6 +107,23 @@
        * @param {string} lang - Language code (e.g., 'en', 'es', 'fr')
        * @param {boolean} saveToStorage - Whether to persist (we ignore this in mock)
        */
+      /**
+       * Mock hass object with connection (mimics home-assistant-js-websocket).
+       * UpdateTheme intercepts sendMessage/sendMessagePromise to prevent
+       * theme persistence to the user profile (HA 2026.2+ behavior).
+       */
+      haEl.hass = {
+        connection: {
+          sendMessage: function(msg) {
+            console.log(`[Mock] WS sendMessage: ${JSON.stringify(msg)}`);
+          },
+          sendMessagePromise: function(msg) {
+            console.log(`[Mock] WS sendMessagePromise: ${JSON.stringify(msg)}`);
+            return Promise.resolve(null);
+          }
+        }
+      };
+
       haEl._selectLanguage = function(lang, saveToStorage = true) {
         const language = lang || 'en';
         document.documentElement.lang = language;
@@ -114,8 +131,8 @@
       };
 
       /**
-       * Theme switching (called by screenshot.js:389 via custom event)
-       * Listens for 'settheme' event with {theme, dark} detail
+       * Theme switching (called via custom event).
+       * Listens for 'settheme' event with {theme, dark} detail.
        */
       haEl.addEventListener('settheme', function(e) {
         const { theme, dark } = e.detail || {};

@@ -173,6 +173,19 @@
         return;
       }
 
+      // Mock hass.connection for theme persistence interception (HA 2026.2+)
+      haEl.hass = {
+        connection: {
+          sendMessage: function(msg) {
+            console.log(`[Mock] WS sendMessage: ${JSON.stringify(msg)}`);
+          },
+          sendMessagePromise: function(msg) {
+            console.log(`[Mock] WS sendMessagePromise: ${JSON.stringify(msg)}`);
+            return Promise.resolve(null);
+          }
+        }
+      };
+
       haEl._selectLanguage = function(lang, saveToStorage = true) {
         const language = lang || 'en';
         document.documentElement.lang = language;
