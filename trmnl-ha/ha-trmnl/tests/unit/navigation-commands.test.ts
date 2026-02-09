@@ -1,8 +1,8 @@
 /**
- * Unit tests for NavigateToPage auth injection
+ * Unit tests for NavigateToPage
  *
- * Verifies that HA auth tokens are injected when navigating to the
- * configured HA instance, and skipped for external URLs.
+ * Verifies auth injection behavior and navigation strategies
+ * (full reload vs client-side routing).
  *
  * @module tests/unit/navigation-commands
  */
@@ -19,14 +19,20 @@ interface MockPageCalls {
   evaluateOnNewDocument: number
   removeScriptToEvaluateOnNewDocument: number
   goto: string[]
+  reload: number
+  evaluate: number
 }
 
-/** Creates a mock Puppeteer Page that tracks auth injection calls */
-function createMockPage(): Page & { calls: MockPageCalls } {
+/** Creates a mock Puppeteer Page that tracks method calls */
+function createMockPage(
+  currentUrl = 'about:blank',
+): Page & { calls: MockPageCalls } {
   const calls: MockPageCalls = {
     evaluateOnNewDocument: 0,
     removeScriptToEvaluateOnNewDocument: 0,
     goto: [],
+    reload: 0,
+    evaluate: 0,
   }
 
   return {
@@ -42,7 +48,14 @@ function createMockPage(): Page & { calls: MockPageCalls } {
       calls.goto.push(url)
       return { ok: () => true, status: () => 200 }
     },
-    url: () => 'about:blank',
+    reload: async () => {
+      calls.reload++
+      return { ok: () => true, status: () => 200 }
+    },
+    evaluate: async () => {
+      calls.evaluate++
+    },
+    url: () => currentUrl,
   } as unknown as Page & { calls: MockPageCalls }
 }
 
@@ -154,6 +167,57 @@ describe('NavigateToPage', () => {
       await nav.call('/unused', true, 'http://grafana.local:3000/dashboard')
 
       expect(mockPage.calls.evaluateOnNewDocument).toBe(0)
+    })
+  })
+
+  // ==========================================================================
+  // Subsequent navigation: same path must reload for fresh content (Issue #34)
+  // ==========================================================================
+
+  describe('subsequent navigation to same HA path', () => {
+    it('reloads page when already on the same HA path', async () => {
+      const page = createMockPage('http://homeassistant:8123/lovelace/kitchen')
+      const nav = new NavigateToPage(
+        page,
+        STUB_AUTH,
+        'http://homeassistant:8123',
+      )
+
+      await nav.call('/lovelace/kitchen', false)
+
+      expect(page.calls.reload).toBe(1)
+      expect(page.calls.evaluate).toBe(0)
+      expect(page.calls.goto).toEqual([])
+    })
+
+    it('uses client-side navigation for a different HA path', async () => {
+      const page = createMockPage('http://homeassistant:8123/lovelace/kitchen')
+      const nav = new NavigateToPage(
+        page,
+        STUB_AUTH,
+        'http://homeassistant:8123',
+      )
+
+      await nav.call('/lovelace/living-room', false)
+
+      expect(page.calls.reload).toBe(0)
+      expect(page.calls.evaluate).toBe(1)
+      expect(page.calls.goto).toEqual([])
+    })
+
+    it('uses page.goto for generic targetUrl on subsequent navigation', async () => {
+      const page = createMockPage('http://homeassistant:8123/lovelace/kitchen')
+      const nav = new NavigateToPage(
+        page,
+        STUB_AUTH,
+        'http://homeassistant:8123',
+      )
+
+      await nav.call('/unused', false, 'http://grafana.local:3000/dashboard')
+
+      expect(page.calls.reload).toBe(0)
+      expect(page.calls.evaluate).toBe(0)
+      expect(page.calls.goto).toEqual(['http://grafana.local:3000/dashboard'])
     })
   })
 })

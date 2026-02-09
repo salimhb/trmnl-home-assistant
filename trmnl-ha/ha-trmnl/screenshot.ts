@@ -5,7 +5,6 @@
  * Implements caching, smart waiting, and error classification for robust automation.
  *
  * Performance Optimizations:
- * - Navigation caching: Skip navigation if same path requested
  * - Theme caching: Skip theme updates if same theme/dark mode requested
  * - Language caching: Skip language updates if same lang requested
  * - Puppeteer args: 40+ flags to disable unused features and reduce memory
@@ -396,30 +395,25 @@ export class Browser {
 
       const isFirstNavigation = this.#lastRequestedPath === undefined
 
-      // Navigate to page if path changed (or different targetUrl)
+      // Always navigate to ensure fresh content (HA dashboards update dynamically)
       const effectivePath = targetUrl || pagePath
-      if (
-        this.#lastRequestedPath === undefined ||
-        this.#lastRequestedPath !== effectivePath
-      ) {
-        const authStorage = this.#buildAuthStorage()
-        const navigateCmd = new NavigateToPage(
-          page,
-          authStorage,
-          this.#homeAssistantUrl
-        )
-        await navigateCmd.call(pagePath, isFirstNavigation, targetUrl)
-        this.#lastRequestedPath = effectivePath
+      const authStorage = this.#buildAuthStorage()
+      const navigateCmd = new NavigateToPage(
+        page,
+        authStorage,
+        this.#homeAssistantUrl,
+      )
+      await navigateCmd.call(pagePath, isFirstNavigation, targetUrl)
+      this.#lastRequestedPath = effectivePath
 
-        // Check if we landed on HA login/auth page (indicates invalid token)
-        const currentUrl = page.url()
-        if (currentUrl.includes('/auth/')) {
-          log.error`INVALID ACCESS TOKEN - Redirected to login page: ${currentUrl}`
-          log.error`Your Home Assistant access token appears to be invalid or expired`
-          log.error`Please generate a new Long-Lived Access Token in your HA profile:`
-          log.error`  Profile -> Security -> Long-Lived Access Tokens -> Create Token`
-          // Continue anyway - will capture the login page (helps user see the issue)
-        }
+      // Check if we landed on HA login/auth page (indicates invalid token)
+      const currentUrl = page.url()
+      if (currentUrl.includes('/auth/')) {
+        log.error`INVALID ACCESS TOKEN - Redirected to login page: ${currentUrl}`
+        log.error`Your Home Assistant access token appears to be invalid or expired`
+        log.error`Please generate a new Long-Lived Access Token in your HA profile:`
+        log.error`  Profile -> Security -> Long-Lived Access Tokens -> Create Token`
+        // Continue anyway - will capture the login page (helps user see the issue)
       }
 
       // Apply page setup strategy (HA vs Generic have different requirements)
@@ -461,7 +455,7 @@ export class Browser {
         // Step 2: Wait for loading indicators to disappear
         const loadingCmd = new WaitForLoadingComplete(
           page,
-          Math.max(1000, maxWait - networkWait)
+          Math.max(1000, maxWait - networkWait),
         )
         const loadingWait = await loadingCmd.call()
         log.debug`Loading complete after ${loadingWait}ms`
@@ -469,7 +463,7 @@ export class Browser {
         // Step 3: Final stability check (content stops changing)
         const remainingTime = Math.max(
           1000,
-          maxWait - networkWait - loadingWait
+          maxWait - networkWait - loadingWait,
         )
         const stableCmd = new WaitForPageStable(page, remainingTime)
         const stableWait = await stableCmd.call()
@@ -483,7 +477,7 @@ export class Browser {
       if (err instanceof BrowserCrashError) throw err
       if (this.#pageErrorDetected) {
         throw new PageCorruptedError(
-          `Navigation failed with page errors: ${(err as Error).message}`
+          `Navigation failed with page errors: ${(err as Error).message}`,
         )
       }
       if (err instanceof CannotOpenPageError) throw err
@@ -571,7 +565,7 @@ export class Browser {
 
       if (this.#pageErrorDetected) {
         throw new PageCorruptedError(
-          `Screenshot failed with page errors: ${(err as Error).message}`
+          `Screenshot failed with page errors: ${(err as Error).message}`,
         )
       }
 

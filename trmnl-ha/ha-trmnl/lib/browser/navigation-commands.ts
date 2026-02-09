@@ -153,18 +153,25 @@ export class NavigateToPage {
         throw new CannotOpenPageError(response?.status() ?? 0, pageUrl)
       }
     } else {
-      // Real HA: Use client-side navigation
-      const haUrl = new URL(pagePath, this.#homeAssistantUrl).toString()
-      log.info`Navigating to: ${haUrl} (mode: HA client-side)`
-      await this.#page.evaluate((path: string) => {
-        const state = history.state as { root?: boolean } | null
-        history.replaceState(state?.root ? { root: true } : null, '', path)
-        const event = new Event('location-changed') as Event & {
-          detail?: { replace: boolean }
-        }
-        event.detail = { replace: true }
-        window.dispatchEvent(event)
-      }, pagePath)
+      // Same path? Full reload to get fresh entity states
+      const currentPath = new URL(this.#page.url()).pathname
+      if (currentPath === pagePath) {
+        log.info`Reloading: ${pagePath} (mode: full-reload, same path)`
+        await this.#page.reload()
+      } else {
+        // Different HA path: Use client-side navigation (faster, preserves state)
+        const haUrl = new URL(pagePath, this.#homeAssistantUrl).toString()
+        log.info`Navigating to: ${haUrl} (mode: HA client-side)`
+        await this.#page.evaluate((path: string) => {
+          const state = history.state as { root?: boolean } | null
+          history.replaceState(state?.root ? { root: true } : null, '', path)
+          const event = new Event('location-changed') as Event & {
+            detail?: { replace: boolean }
+          }
+          event.detail = { replace: true }
+          window.dispatchEvent(event)
+        }, pagePath)
+      }
     }
 
     return { waitTime: DEFAULT_WAIT_TIME }
@@ -523,7 +530,10 @@ export class UpdateTheme {
   async call(theme: string, dark: boolean): Promise<void> {
     await this.#page.evaluate(
       ({ theme, dark }: { theme: string; dark: boolean }) => {
-        interface WsMsg { type: string; [k: string]: unknown }
+        interface WsMsg {
+          type: string
+          [k: string]: unknown
+        }
         type SendFn = (msg: WsMsg) => void
         type SendPromiseFn = (msg: WsMsg) => Promise<unknown>
         interface HAConn {
