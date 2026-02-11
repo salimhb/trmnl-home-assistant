@@ -414,7 +414,6 @@ export class Browser {
       )
       await navigateCmd.call(pagePath, targetUrl)
 
-
       // Check if we landed on HA login/auth page (indicates invalid token)
       const currentUrl = page.url()
       if (currentUrl.includes('/auth/')) {
@@ -536,7 +535,7 @@ export class Browser {
         x: 0,
         y: headerHeight,
         width: viewport.width,
-        height: viewport.height - headerHeight,
+        height: viewport.height,
       }
 
       // Apply crop if specified
@@ -567,8 +566,6 @@ export class Browser {
 
       return { image, time: Date.now() - start }
     } catch (err) {
-  
-
       if (
         (err as Error).message?.includes('Target closed') ||
         (err as Error).message?.includes('Session closed') ||
