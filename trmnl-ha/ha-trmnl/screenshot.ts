@@ -166,7 +166,6 @@ export class Browser {
   #pageErrorDetected: boolean = false
 
   // Cache last requested values to avoid unnecessary page updates
-  #lastRequestedPath: string | undefined
   #lastRequestedLang: string | undefined
   #lastRequestedTheme: string | undefined
   #lastRequestedDarkMode: boolean | undefined
@@ -210,7 +209,7 @@ export class Browser {
 
     this.#page = undefined
     this.#browser = undefined
-    this.#lastRequestedPath = undefined
+
     this.#lastRequestedLang = undefined
     this.#lastRequestedTheme = undefined
     this.#lastRequestedDarkMode = undefined
@@ -290,7 +289,7 @@ export class Browser {
   async #closePage(): Promise<void> {
     const page = this.#page
     this.#page = undefined
-    this.#lastRequestedPath = undefined
+
     this.#lastRequestedLang = undefined
     this.#lastRequestedTheme = undefined
     this.#lastRequestedDarkMode = undefined
@@ -406,7 +405,6 @@ export class Browser {
       })
 
       // Always first navigation on fresh page - injects auth + full page.goto()
-      const effectivePath = targetUrl || pagePath
       const authStorage = this.#buildAuthStorage()
       const navigateCmd = new NavigateToPage(
         page,
@@ -414,7 +412,7 @@ export class Browser {
         this.#homeAssistantUrl,
       )
       await navigateCmd.call(pagePath, targetUrl)
-      this.#lastRequestedPath = effectivePath
+
 
       // Check if we landed on HA login/auth page (indicates invalid token)
       const currentUrl = page.url()
@@ -561,7 +559,7 @@ export class Browser {
 
       return { image, time: Date.now() - start }
     } catch (err) {
-      this.#lastRequestedPath = undefined
+  
 
       if (
         (err as Error).message?.includes('Target closed') ||

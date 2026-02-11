@@ -29,7 +29,7 @@ interface MockPageCalls {
   evaluateOnNewDocument: number
   removeScriptToEvaluateOnNewDocument: number
   goto: string[]
-  evaluate: Array<{ fn: unknown; args: unknown[] }>
+  evaluate: { fn: unknown; args: unknown[] }[]
   waitForFunction: number
 }
 
