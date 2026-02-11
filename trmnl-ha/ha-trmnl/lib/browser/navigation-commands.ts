@@ -266,6 +266,53 @@ export class WaitForLoadingComplete {
 }
 
 /**
+ * Dismisses Home Assistant notification toasts (e.g., "Update available").
+ *
+ * HA fires toasts on page load for updates, new integrations, etc.
+ * These appear even on fresh pages and would pollute screenshots.
+ *
+ * NOTE: Calls .close() on the ha-toast element directly rather than clicking
+ * action/dismiss buttons. The action button (slot="action") can trigger
+ * navigation or other side effects; the dismiss button (slot="dismiss") is
+ * only rendered when dismissable=true. Calling .close() is safe in all cases.
+ *
+ * @see frontend/src/managers/notification-manager.ts
+ * @see frontend/src/components/ha-toast.ts (extends mwc-snackbar)
+ */
+export class DismissToasts {
+  #page: Page
+
+  constructor(page: Page) {
+    this.#page = page
+  }
+
+  /** @returns Number of toasts dismissed */
+  async call(): Promise<number> {
+    return this.#page.evaluate(() => {
+      const haEl = document.querySelector('home-assistant')
+      if (!haEl) return 0
+
+      const notifyEl = haEl.shadowRoot?.querySelector(
+        'notification-manager',
+      ) as (Element & { shadowRoot: ShadowRoot | null }) | null
+      if (!notifyEl?.shadowRoot) return 0
+
+      const toasts = Array.from(
+        notifyEl.shadowRoot.querySelectorAll('ha-toast'),
+      ) as (HTMLElement & { close?: (reason?: string) => void })[]
+      let dismissed = 0
+      for (const toast of toasts) {
+        if (typeof toast.close === 'function') {
+          toast.close('dismiss')
+          dismissed++
+        }
+      }
+      return dismissed
+    })
+  }
+}
+
+/**
  * Waits for the browser rendering pipeline to flush after DOM changes.
  *
  * Uses the "double requestAnimationFrame" technique: two consecutive rAF

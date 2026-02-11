@@ -27,6 +27,7 @@ import { processImage } from './lib/dithering.js'
 import {
   NavigateToPage,
   WaitForLoadingComplete,
+  DismissToasts,
   WaitForPaintStability,
   WaitForHassReady,
   type AuthStorage,
@@ -471,7 +472,14 @@ export class Browser {
         const loadingWait = await loadingCmd.call()
         log.debug`Loading indicators cleared after ${loadingWait}ms`
 
-        // Stage 4: Wait for rendering pipeline to flush
+        // Stage 4: Dismiss notification toasts (HA pages only)
+        if (!isGenericUrl) {
+          const dismissCmd = new DismissToasts(page)
+          const count = await dismissCmd.call()
+          if (count > 0) log.debug`Dismissed ${count} notification toast(s)`
+        }
+
+        // Stage 5: Wait for rendering pipeline to flush
         const paintCmd = new WaitForPaintStability(page)
         await paintCmd.call()
       }

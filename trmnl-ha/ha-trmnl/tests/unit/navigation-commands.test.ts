@@ -11,6 +11,7 @@ import {
   NavigateToPage,
   WaitForPageLoad,
   WaitForLoadingComplete,
+  DismissToasts,
   WaitForPaintStability,
   WaitForHassReady,
   UpdateLanguage,
@@ -566,6 +567,31 @@ describe('WaitForLoadingComplete', () => {
       // Should be a valid CSS selector list (comma-separated)
       expect(selectors.split(', ').length).toBeGreaterThanOrEqual(6)
     })
+  })
+})
+
+// =============================================================================
+// DismissToasts
+// =============================================================================
+
+describe('DismissToasts', () => {
+  it('calls page.evaluate and returns dismissed count', async () => {
+    const mockPage = createMockPage({ evaluateResult: 2 })
+    const cmd = new DismissToasts(mockPage)
+
+    const result = await cmd.call()
+
+    expect(mockPage.calls.evaluate.length).toBe(1)
+    expect(result).toBe(2)
+  })
+
+  it('returns 0 when no toasts found', async () => {
+    const mockPage = createMockPage({ evaluateResult: 0 })
+    const cmd = new DismissToasts(mockPage)
+
+    const result = await cmd.call()
+
+    expect(result).toBe(0)
   })
 })
 
