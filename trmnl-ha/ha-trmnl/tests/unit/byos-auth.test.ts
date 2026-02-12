@@ -167,6 +167,29 @@ describe('byos-auth', () => {
       })
     })
 
+    it('updates in-memory auth object on successful refresh', async () => {
+      const auth: ByosAuthConfig = {
+        enabled: true,
+        access_token: 'old-token',
+        refresh_token: 'old-refresh',
+        obtained_at: Date.now() - 30 * 60 * 1000,
+      }
+
+      mockFetch({
+        ok: true,
+        json: async () => ({
+          access_token: 'new-access',
+          refresh_token: 'new-refresh',
+        }),
+      })
+
+      await getValidAccessToken('https://host.com/api', auth)
+
+      expect(auth.access_token).toBe('new-access')
+      expect(auth.refresh_token).toBe('new-refresh')
+      expect(auth.obtained_at).toBeGreaterThan(Date.now() - 5000)
+    })
+
     it('returns null when refresh fails', async () => {
       const auth: ByosAuthConfig = {
         enabled: true,

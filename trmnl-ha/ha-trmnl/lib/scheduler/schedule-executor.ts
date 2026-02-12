@@ -19,7 +19,7 @@ import {
   SCHEDULER_IMAGE_FILE_PATTERN,
   isSchedulerNetworkError,
 } from '../../const.js'
-import { loadSchedules } from '../scheduleStore.js'
+import { loadSchedules, updateSchedule } from '../scheduleStore.js'
 import type {
   Schedule,
   ScreenshotParams,
@@ -151,6 +151,27 @@ export class ScheduleExecutor {
         imageBuffer,
         format: format as 'png' | 'jpeg' | 'bmp',
         webhookFormat: schedule.webhook_format,
+        onTokenRefresh: (newTokens) => {
+          const byosConfig = schedule.webhook_format?.byosConfig
+          if (!byosConfig?.auth) return
+
+          updateSchedule(schedule.id, {
+            webhook_format: {
+              ...schedule.webhook_format!,
+              byosConfig: {
+                ...byosConfig,
+                auth: {
+                  ...byosConfig.auth,
+                  access_token: newTokens.access_token,
+                  refresh_token: newTokens.refresh_token,
+                  obtained_at: Date.now(),
+                },
+              },
+            },
+          }).catch((err: unknown) => {
+            log.error`Failed to persist refreshed BYOS tokens: ${(err as Error).message}`
+          })
+        },
       })
 
       log.info`Schedule "${schedule.name}" webhook success: ${result.status} ${result.statusText}`

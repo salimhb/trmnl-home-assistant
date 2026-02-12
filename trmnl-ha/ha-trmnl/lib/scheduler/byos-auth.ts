@@ -92,7 +92,8 @@ async function refreshToken(
   })
 
   if (!response.ok) {
-    log.warn`BYOS auth: refresh failed (${response.status})`
+    const body = await response.text().catch(() => '')
+    log.warn`BYOS auth: refresh failed (${response.status}) ${body}`
     throw new Error(`BYOS token refresh failed: ${response.status}`)
   }
 
@@ -135,7 +136,12 @@ export async function getValidAccessToken(
     const baseUrl = getBaseUrl(webhookUrl)
     const newTokens = await refreshToken(baseUrl, auth)
 
-    // Notify caller to save new tokens
+    // Update in-memory auth for current execution cycle
+    auth.access_token = newTokens.access_token
+    auth.refresh_token = newTokens.refresh_token
+    auth.obtained_at = Date.now()
+
+    // Persist new tokens to disk for future cron executions
     if (onTokenRefresh) {
       onTokenRefresh(newTokens)
     }

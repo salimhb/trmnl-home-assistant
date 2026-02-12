@@ -11,7 +11,7 @@ import { SCHEDULER_RESPONSE_BODY_TRUNCATE_LENGTH } from '../../const.js'
 import type { ImageFormat, WebhookFormatConfig } from '../../types/domain.js'
 import { webhookLogger } from '../logger.js'
 import { getTransformer } from './webhook-formats.js'
-import { getValidAccessToken, getBaseUrl } from './byos-auth.js'
+import { getValidAccessToken, getBaseUrl, type TokenResponse } from './byos-auth.js'
 
 const log = webhookLogger()
 
@@ -120,6 +120,8 @@ export interface WebhookDeliveryOptions {
   format: ImageFormat
   /** Webhook payload format (null/undefined = 'raw' for backward compat) */
   webhookFormat?: WebhookFormatConfig | null
+  /** Callback to persist refreshed BYOS JWT tokens */
+  onTokenRefresh?: (newTokens: TokenResponse) => void
 }
 
 /** Result from webhook upload */
@@ -145,6 +147,7 @@ export async function uploadToWebhook(
     imageBuffer,
     format,
     webhookFormat,
+    onTokenRefresh,
   } = options
 
   // Get transformer and build payload
@@ -174,7 +177,7 @@ export async function uploadToWebhook(
 
   // Handle BYOS JWT authentication
   if (byosConfig?.auth?.enabled && byosConfig.auth.access_token) {
-    const accessToken = await getValidAccessToken(webhookUrl, byosConfig.auth)
+    const accessToken = await getValidAccessToken(webhookUrl, byosConfig.auth, onTokenRefresh)
     if (accessToken) {
       headers['Authorization'] = accessToken
       log.debug`BYOS auth: using JWT token`
